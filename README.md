@@ -1,1 +1,1 @@
-This is my learning scripts for databases such PostgreSQL, MongoDB.
+**My learning notes and scripts for databases such as PostgreSQL, MongoDB.**
