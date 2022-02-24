@@ -12,6 +12,9 @@ public class ApiContext : DbContext
     {
         
     }
+    
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        => optionsBuilder.LogTo(Console.WriteLine);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +32,10 @@ public class ApiContext : DbContext
                 
                 .ValueGeneratedOnAdd()
                 .Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore)*/;
+
+            entity.Property(e => e.RowVersion)
+                .HasColumnName("row_version")
+                .IsConcurrencyToken();
 
             entity.OwnsOne(c => c.Address, e =>
             {

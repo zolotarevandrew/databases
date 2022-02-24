@@ -25,4 +25,23 @@ app.MapGet("/get", async (ApiContext context) =>
     return users;
 });
 
+app.MapPut("/address/{id}", async (ApiContext context, int id) =>
+{
+    try
+    {
+        var found = await context.Users.FirstOrDefaultAsync(c => c.Id == id);
+        var newAddress = new Address("city1", "street1", "home");
+        found.ChangeAddress(newAddress);
+
+        context.Users.Update(found);
+        await context.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException ex)
+    {
+        return "conflict";
+    }
+    
+    return "ok";
+});
+
 app.Run();
