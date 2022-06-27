@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisCaching", "RedisCachin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisCachingAdvanced", "RedisCachingAdvanced\RedisCachingAdvanced.csproj", "{8452B47A-17C1-4D6E-AC74-38FC181EDC9F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisDataTypes", "RedisDataTypes\RedisDataTypes.csproj", "{314D631E-AFDC-4711-8788-1C480A59C331}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{8452B47A-17C1-4D6E-AC74-38FC181EDC9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8452B47A-17C1-4D6E-AC74-38FC181EDC9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8452B47A-17C1-4D6E-AC74-38FC181EDC9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{314D631E-AFDC-4711-8788-1C480A59C331}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{314D631E-AFDC-4711-8788-1C480A59C331}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{314D631E-AFDC-4711-8788-1C480A59C331}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{314D631E-AFDC-4711-8788-1C480A59C331}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
