@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisDataTypes", "RedisData
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisList", "RedisList\RedisList.csproj", "{C1D09914-9536-4093-A9AE-8403E54E5DD4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisSet", "RedisSet\RedisSet.csproj", "{0AC959CA-4693-42C6-BFD7-8A23CB173A78}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{C1D09914-9536-4093-A9AE-8403E54E5DD4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C1D09914-9536-4093-A9AE-8403E54E5DD4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C1D09914-9536-4093-A9AE-8403E54E5DD4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0AC959CA-4693-42C6-BFD7-8A23CB173A78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0AC959CA-4693-42C6-BFD7-8A23CB173A78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0AC959CA-4693-42C6-BFD7-8A23CB173A78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0AC959CA-4693-42C6-BFD7-8A23CB173A78}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
