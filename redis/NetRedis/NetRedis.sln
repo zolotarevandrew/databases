@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisSet", "RedisSet\RedisS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisSortedSet", "RedisSortedSet\RedisSortedSet.csproj", "{36794CFC-537F-46A6-86A0-2D5A40A0E12E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisStreams", "RedisStreams\RedisStreams.csproj", "{5919C10C-1EF3-4477-8BF2-0188D4C05078}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{36794CFC-537F-46A6-86A0-2D5A40A0E12E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{36794CFC-537F-46A6-86A0-2D5A40A0E12E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{36794CFC-537F-46A6-86A0-2D5A40A0E12E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5919C10C-1EF3-4477-8BF2-0188D4C05078}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5919C10C-1EF3-4477-8BF2-0188D4C05078}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5919C10C-1EF3-4477-8BF2-0188D4C05078}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5919C10C-1EF3-4477-8BF2-0188D4C05078}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
