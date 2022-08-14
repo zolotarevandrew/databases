@@ -27,7 +27,7 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         IDatabase db = _connection.GetDatabase();
-
+db.set
         await ParallelSet(db);
     }
 
