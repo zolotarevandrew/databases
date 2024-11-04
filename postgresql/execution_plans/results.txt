@@ -1,1 +1,43 @@
 link - https://www.postgresql.org/docs/current/sql-explain.html
+
+explain (analyze, verbose, costs, settings, buffers, wal, timing, summary) select * from bookings where book_ref = '00000F';
+
+1) analyze - executes the query;
+planning time - time spent analyzing and optimizing query before using it;
+execution time - actual time to execute query;
+
+2) verbose - show additional details of plan output (internal nodes etc)
+adds - Output for each node (book_ref, book_date, total_amount);
+
+3) costs - includes startup and total costs;
+(cost=0.42..8.44 rows=1 width=21) (actual time=0.016..0.017 rows=1 loops=1)
+startup cost - 0.42, estimated time to produce first row;
+total cost - 8.44, time to process all required rows to return;
+rows - 1, expected rows to return based on statistics;
+width - 21, estimated size of each row in output; 
+actual start time - 0.016 ms, time to reach the first rows actual time;
+actual end time - 0.017ms, actual time to output all rows;
+actual rows - 1, actual rows returned;
+loops - 1, number of times node was executed;
+
+cpu_tuple_cost - Cost of processing each row in memory (default is typically 0.01);
+cpu_index_tuple_cost - Cost of processing each row in an index scan;
+seq_page_cost -  Cost of sequentially scanning a page from disk (default is 1.0);
+random_page_cost -  Cost of a random disk page access (default is 4.0, higher to reflect the inefficiency of random I/O);
+
+4) settings - showing custom configuration settings (work_mem, maintenance_work_mem)
+adds - Settings: search_path = 'bookings, bookings, public'
+
+5) buffers - tracks disk+ memory i/o for each pipeline
+adds - Buffers: shared hit=4
+
+hit - found hit in buffer cache;
+read - has to fetch page from disk, it is not in buffer cache;
+dirtied - pages is dirtied, needing to write to disk;
+written - written back to disk;
+
+shared buffers - buffer cache;
+local buffers - local buffers;
+temporary buffers - sort/hash joins etc
+  
+6) wal, timing, summary - useless with analyze;
