@@ -1,0 +1,2 @@
+docker-compose up -d
+docker-compose exec postgres psql -U admin -d my_db -f /scripts/demo.sql
