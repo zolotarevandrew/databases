@@ -1,0 +1,67 @@
+Week 1: Core Scan Types and Basic Indexing
+Day 1-2: Index Scans
+
+Run queries with simple INDEX SCAN operations (e.g., queries with WHERE on indexed columns).
+Experiment with covering indexes, partially indexed columns, and compare execution plans.
+Day 3-4: Bitmap Index Scans
+
+Explore queries that trigger BITMAP INDEX SCAN and BITMAP HEAP SCAN.
+Use EXPLAIN (ANALYZE, BUFFERS) to study how data pages are accessed.
+Compare performance with INDEX SCAN and SEQ SCAN on similar datasets.
+Day 5-6: Index-only Scans
+
+Create covering indexes (indexes that contain all columns needed in the query) and observe how INDEX ONLY SCAN is triggered.
+Experiment with VACUUM to see how PostgreSQL uses visibility maps to skip reading certain pages.
+Day 7: Summary and Review
+
+Review and document your findings on scan types and indexes.
+Week 2: Join Strategies and Optimizing Joins
+Day 1-2: Nested Loop Joins
+
+Run queries with small tables that trigger NESTED LOOP joins.
+Analyze the impact of join order and indexed join columns.
+Day 3-4: Hash Joins
+
+Run joins on larger tables to explore HASH JOIN execution.
+Experiment with WORK_MEM settings to see how memory affects in-memory hash tables and disk spill.
+Day 5-6: Merge Joins
+
+Study MERGE JOIN by running ordered joins.
+Experiment with indexed joins to observe when PostgreSQL switches to merge join from hash join.
+Day 7: Summary and Review
+
+Document findings on join types, with examples of when each is optimal.
+Week 3: Aggregates, Sorting, and Grouping
+Day 1-2: Aggregation Strategies
+
+Use aggregation functions (COUNT, SUM, AVG, etc.) with and without indexes.
+Observe HASHAGGREGATE vs. GROUPAGGREGATE and experiment with WORK_MEM to see its effect.
+Day 3-4: Sorting
+
+Run queries with ORDER BY on indexed and non-indexed columns.
+Compare SORT node execution plans and study buffer usage.
+Day 5-6: Grouping and Distinct
+
+Run queries with GROUP BY and DISTINCT.
+Observe the different methods PostgreSQL uses to handle grouping (HashAggregate, GroupAggregate, or Sort).
+Day 7: Summary and Review
+
+Document findings on aggregate strategies and sorting mechanisms.
+Week 4: Advanced Techniques and Real-World Scenarios
+Day 1-2: Subqueries and CTEs
+
+Explore execution plans of subqueries and WITH CTEs (common table expressions).
+Test materialized CTEs and non-materialized CTEs and observe their impact on execution time.
+Day 3-4: Parallelism
+
+Experiment with large tables and queries that trigger parallel plans (e.g., PARALLEL SEQ SCAN).
+Adjust max_parallel_workers_per_gather and observe how parallelism affects query speed.
+Day 5-6: Analyzing Query Costs and Buffers
+
+Use EXPLAIN (ANALYZE, BUFFERS) to break down I/O costs.
+Experiment with increasing shared_buffers and work_mem to observe their effect on cost and execution times.
+Day 7: Summary and Review
+
+Summarize findings on advanced plan optimization and parallelism.
+Weeks 5 and Beyond: Specialized Optimizations and Tuning
+Advanced Indexing: Experiment with partial indexes, expression indexes, and unique constraints. Query Rewrites and Hints: Explore PostgreSQL hints and strategies to influence query plans. Real-World Scenarios: Analyze complex production queries to spot common pitfalls. Daily Practice: Continue with real-world query analysis and regular optimization practice.
