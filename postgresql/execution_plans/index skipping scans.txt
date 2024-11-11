@@ -1,0 +1,177 @@
+1) ARRAY Construction..
+
+explain (analyze, buffers) select * from bookings where book_ref = ANY(
+ARRAY[
+'00000F',
+'000012',
+'00002D',
+'000068',
+'0000C9'
+])
+
+Gather  (cost=1000.00..10943.80 rows=14836 width=21) (actual time=0.130..56.279 rows=5 loops=1)
+  Workers Planned: 2
+  Workers Launched: 2
+  Buffers: shared hit=3830
+  ->  Parallel Seq Scan on bookings  (cost=0.00..8460.20 rows=6182 width=21) (actual time=34.767..52.861 rows=2 loops=3)
+        Filter: ((book_ref)::text = ANY ('{00000F,000012,00002D,000068,0000C9}'::text[]))
+        Rows Removed by Filter: 197809
+        Buffers: shared hit=3830
+Planning Time: 0.041 ms
+Execution Time: 56.291 ms
+
+2 worker were planned.. wtf
+because of array is constructed in runtime..
+
+
+2) Range Queries on Columns with High Cardinality but Sparse Matches 
+
+create index bookings_total_amount on bookings(total_amount);
+
+explain (analyze, buffers) select * from bookings 
+where total_amount > 37900.00
+
+Seq Scan on bookings  (cost=0.00..11241.91 rows=401776 width=21) (actual time=0.005..65.373 rows=399791 loops=1)
+  Filter: (total_amount > 37900.00)
+  Rows Removed by Filter: 193642
+  Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=15 read=1
+Planning Time: 0.169 ms
+Execution Time: 75.832 ms
+
+3) Functions or expressions
+
+explain (analyze, buffers)  select * from flights where flight_no = LOWER('PG0384')
+
+Seq Scan on flights  (cost=0.00..1816.96 rows=328 width=63) (actual time=23.093..23.094 rows=0 loops=1)
+  Filter: ((flight_no)::text = 'pg0384'::text)
+  Rows Removed by Filter: 65664
+  Buffers: shared read=832
+Planning:
+  Buffers: shared hit=123 read=10
+Planning Time: 1.867 ms
+Execution Time: 23.115 ms
+sequence scan because of function
+
+explain (analyze, buffers)  select * from flights where flight_no = LOWER('PG0384')
+
+Seq Scan on flights  (cost=0.00..1816.96 rows=328 width=63) (actual time=23.093..23.094 rows=0 loops=1)
+  Filter: ((flight_no)::text = 'pg0384'::text)
+  Rows Removed by Filter: 65664
+  Buffers: shared read=832
+Planning:
+  Buffers: shared hit=123 read=10
+Planning Time: 1.867 ms
+Execution Time: 23.115 ms
+
+create index flights_lower_no on flights(LOWER(flight_no)) even with the index it is using seq scan.
+
+create index flights_lower_no on flights(LOWER(flight_no::bpchar))
+explain (analyze, buffers)  select * from flights where (flight_no::bpchar) = LOWER('PG0384'::bpchar)
+
+this is also gave incorrect results
+
+
+create index flights_lower_no on flights(LOWER(flight_no::bpchar))
+explain (analyze, buffers)  select * from flights where LOWER(flight_no::bpchar) = LOWER('PG0384'::bpchar)
+
+Bitmap Heap Scan on flights  (cost=6.83..636.85 rows=328 width=63) (actual time=0.019..0.036 rows=121 loops=1)
+  Recheck Cond: (lower(((flight_no)::bpchar)::text) = 'pg0384'::text)
+  Heap Blocks: exact=6
+  Buffers: shared hit=8
+  ->  Bitmap Index Scan on flights_lower_no  (cost=0.00..6.75 rows=328 width=0) (actual time=0.015..0.015 rows=121 loops=1)
+        Index Cond: (lower(((flight_no)::bpchar)::text) = 'pg0384'::text)
+        Buffers: shared hit=2
+Planning Time: 0.059 ms
+Execution Time: 0.051 ms
+
+finally bitmap scan..
+
+
+When creating an index on a function or an expression (e.g., LOWER(flight_no::bpchar)), 
+PostgreSQL stores results of that exact expression for each row in the index.
+To use the index, PostgreSQL must detect that the query’s filter condition matches the indexed expression precisely. 
+If there is a mismatch, even a minor one like an extra or missing type cast, PostgreSQL won’t consider the index relevant and defaults to a sequential scan.
+
+4) Non-Equality Conditions with High Selectivity
+
+explain (analyze, buffers)  select * from flights where flight_no != 'PG0384'
+
+Seq Scan on flights  (cost=0.00..1652.80 rows=65579 width=63) (actual time=0.005..6.402 rows=65543 loops=1)
+  Filter: (flight_no <> 'PG0384'::bpchar)
+  Rows Removed by Filter: 121
+  Buffers: shared hit=832
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.060 ms
+Execution Time: 8.039 ms
+
+5) Indexes on Unstable Columns in Frequent Updates
+
+For frequently updated columns, PostgreSQL may avoid the index to reduce overhead, especially for tables that have many INSERT/UPDATE operations on indexed columns.
+
+"UPDATE table SET indexed_column = indexed_column + 1 WHERE condition;"
+
+6) Small Tables
+
+explain (analyze, buffers)  select * from airports_data where airport_code = 'MJZ'::bpchar
+
+airports_data only 108 rows.
+
+Seq Scan on airports_data  (cost=0.00..4.30 rows=1 width=145) (actual time=0.009..0.019 rows=1 loops=1)
+  Filter: (airport_code = 'MJZ'::bpchar)
+  Rows Removed by Filter: 103
+  Buffers: shared hit=3
+Planning Time: 0.041 ms
+Execution Time: 0.027 ms
+
+
+For small tables, PostgreSQL might prefer a sequential scan because reading the entire table 
+may be faster than using an index due to caching.
+
+7) Inefficient Indexing on Composite Types
+
+Composite indexes may not be used effectively if the query only filters by the second or subsequent columns 
+of the index without specifying the leftmost column(s).
+
+create index flights_status_aircraft_code_idx on flights(status, aircraft_code);
+
+explain (analyze,buffers) select * from flights where aircraft_code = 'CN1'
+
+Seq Scan on flights  (cost=0.00..1652.80 rows=18434 width=63) (actual time=0.006..7.196 rows=18394 loops=1)
+  Filter: (aircraft_code = 'CN1'::bpchar)
+  Rows Removed by Filter: 47270
+  Buffers: shared hit=832
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.079 ms
+Execution Time: 7.714 ms
+
+But 
+
+explain (analyze,buffers) select * from flights where status = 'On time'
+
+Index Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..7.45 rows=1 width=63) (actual time=0.095..0.095 rows=0 loops=1)
+  Index Cond: ((status)::text = 'On time'::text)
+  Buffers: shared read=2
+Planning Time: 0.067 ms
+Execution Time: 0.104 ms
+
+8) Low Selectivity even with the index.
+explain (analyze, buffers)  select * from flights where status = 'Scheduled' or flight_no = 'PG0384'
+
+Seq Scan on flights  (cost=0.00..1816.96 rows=15299 width=63) (actual time=0.009..7.803 rows=15476 loops=1)
+  Filter: (((status)::text = 'Scheduled'::text) OR (flight_no = 'PG0384'::bpchar))
+  Rows Removed by Filter: 50188
+  Buffers: shared hit=832
+Planning Time: 0.054 ms
+Execution Time: 8.240 ms
+
+The planner estimated a high number of rows that might match either condition in the query (15,299 rows
+Seq scan is often more efficient for large result sets because it can read through the entire table faster than repeated index lookups.
+
+create index flights_no_idx on flights(flight_no) - even with that index, it is costly to scan 15299 rows..
+
+
+

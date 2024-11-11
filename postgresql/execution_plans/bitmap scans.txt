@@ -1,0 +1,131 @@
+1) explain (analyze, buffers) select * from bookings 
+where total_amount > 100000.00
+
+Bitmap Heap Scan on bookings  (cost=2731.69..8373.87 rows=145454 width=21) (actual time=10.674..25.396 rows=146045 loops=1)
+  Recheck Cond: (total_amount > 100000.00)
+  Heap Blocks: exact=3780
+  Buffers: shared hit=3780 read=402
+  ->  Bitmap Index Scan on bookings_total_amount  (cost=0.00..2695.33 rows=145454 width=0) (actual time=10.289..10.289 rows=146045 loops=1)
+        Index Cond: (total_amount > 100000.00)
+        Buffers: shared read=402
+Planning Time: 0.051 ms
+Execution Time: 29.108 ms
+
+Middle selectivity
+Planner have chosen bitmap index scan.
+
+Bitmap Index Scan - Building a Bitmap of Matching Rows (reads through the index in this case)
+
+Bitmap Heap Scan fetches the data in bulk by accessing pages marked in the bitmap, reducing the number of random I/O operations.
+In this plan, Heap Blocks: exact=3780 indicates that 3,780 pages (blocks) were accessed to retrieve the rows that matched the index condition.
+
+The Recheck Condition is essential in bitmap scans. 
+It re-evaluates the condition (total_amount > 100000.00) on each row in the selected pages to ensure they actually meet the condition.
+
+This step is necessary because the Bitmap Index Scan initially only checks the index entries, 
+which can sometimes lead to "false positives" where pages contain rows that don’t fully satisfy the condition.
+
+2) explain (analyze, buffers) select * from bookings 
+where total_amount between 99900 and 100000
+
+Bitmap Heap Scan on bookings  (cost=7.91..1031.46 rows=340 width=21) (actual time=0.092..0.379 rows=419 loops=1)
+  Recheck Cond: ((total_amount >= '99900'::numeric) AND (total_amount <= '100000'::numeric))
+  Heap Blocks: exact=395
+  Buffers: shared hit=399
+  ->  Bitmap Index Scan on bookings_total_amount  (cost=0.00..7.83 rows=340 width=0) (actual time=0.060..0.060 rows=419 loops=1)
+        Index Cond: ((total_amount >= '99900'::numeric) AND (total_amount <= '100000'::numeric))
+        Buffers: shared hit=4
+Planning Time: 0.068 ms
+Execution Time: 0.403 ms
+
+3) create index bookings_date on bookings(book_date);
+explain (analyze, buffers) select * from bookings 
+where book_date between '2017-07-05 03:12:00.000 +0300' and '2017-07-07 03:12:00.000 +0300'
+
+Bitmap Heap Scan on bookings  (cost=185.47..4174.91 rows=11029 width=21) (actual time=0.853..4.100 rows=11091 loops=1)
+  Recheck Cond: ((book_date >= '2017-07-05 03:12:00+03'::timestamp with time zone) AND (book_date <= '2017-07-07 03:12:00+03'::timestamp with time zone))
+  Heap Blocks: exact=3595
+  Buffers: shared hit=3616
+  ->  Bitmap Index Scan on bookings_date  (cost=0.00..182.72 rows=11029 width=0) (actual time=0.528..0.528 rows=11091 loops=1)
+        Index Cond: ((book_date >= '2017-07-05 03:12:00+03'::timestamp with time zone) AND (book_date <= '2017-07-07 03:12:00+03'::timestamp with time zone))
+        Buffers: shared hit=21
+Planning:
+  Buffers: shared hit=6
+Planning Time: 0.058 ms
+Execution Time: 4.405 ms
+
+4) create index flights_no_status_idx on flights(flight_no, status);
+
+explain (analyze, buffers)  select * from flights where flight_no = 'PG0384'
+
+Bitmap Heap Scan on flights  (cost=4.95..254.19 rows=85 width=63) (actual time=0.021..0.038 rows=121 loops=1)
+  Recheck Cond: (flight_no = 'PG0384'::bpchar)
+  Heap Blocks: exact=6
+  Buffers: shared hit=6 read=2
+  ->  Bitmap Index Scan on flights_no_status_idx  (cost=0.00..4.93 rows=85 width=0) (actual time=0.017..0.018 rows=121 loops=1)
+        Index Cond: (flight_no = 'PG0384'::bpchar)
+        Buffers: shared read=2
+Planning:
+  Buffers: shared hit=8 read=1
+Planning Time: 0.123 ms
+Execution Time: 0.052 ms
+
+5) explain (analyze, buffers)  select * from flights where flight_no = 'PG0384'
+and status = 'Scheduled'
+
+Bitmap Heap Scan on flights  (cost=4.50..75.49 rows=20 width=63) (actual time=0.013..0.021 rows=28 loops=1)
+  Recheck Cond: ((flight_no = 'PG0384'::bpchar) AND ((status)::text = 'Scheduled'::text))
+  Heap Blocks: exact=6
+  Buffers: shared hit=8
+  ->  Bitmap Index Scan on flights_no_status_idx  (cost=0.00..4.49 rows=20 width=0) (actual time=0.010..0.010 rows=28 loops=1)
+        Index Cond: ((flight_no = 'PG0384'::bpchar) AND ((status)::text = 'Scheduled'::text))
+        Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=8
+Planning Time: 0.068 ms
+Execution Time: 0.033 ms
+
+Recheck cond -  PostgreSQL may switch to a lossy bitmap format. In a lossy bitmap, instead of marking individual row locations, 
+PostgreSQL marks entire pages (blocks) where matches are found. 
+This saves memory but means some pages might contain non-matching rows.
+
+
+Heap Blocks: exact=6 indicates that only 6 blocks were accessed to retrieve all 28 rows. 
+This is much more efficient than potentially accessing each row's block individually.
+
+6) explain (analyze, buffers)  select * from flights where flight_no between 'PG0335' and 'PG0384'
+
+Bitmap Heap Scan on flights  (cost=57.52..949.85 rows=4022 width=63) (actual time=0.196..0.520 rows=4153 loops=1)
+  Recheck Cond: ((flight_no >= 'PG0335'::bpchar) AND (flight_no <= 'PG0384'::bpchar))
+  Heap Blocks: exact=92
+  Buffers: shared hit=94 read=4
+  ->  Bitmap Index Scan on flights_no_status_idx  (cost=0.00..56.51 rows=4022 width=0) (actual time=0.186..0.186 rows=4153 loops=1)
+        Index Cond: ((flight_no >= 'PG0335'::bpchar) AND (flight_no <= 'PG0384'::bpchar))
+        Buffers: shared hit=2 read=4
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.101 ms
+Execution Time: 0.626 ms
+
+7) explain (analyze, buffers)  select * from flights where flight_no = 'PG0384' or status = 'On Time'
+
+Bitmap Heap Scan on flights  (cost=758.02..1582.79 rows=638 width=63) (actual time=0.228..0.557 rows=638 loops=1)
+  Recheck Cond: ((flight_no = 'PG0384'::bpchar) OR ((status)::text = 'On Time'::text))
+  Heap Blocks: exact=414
+  Buffers: shared hit=480
+  ->  BitmapOr  (cost=758.02..758.02 rows=639 width=0) (actual time=0.195..0.196 rows=0 loops=1)
+        Buffers: shared hit=66
+        ->  Bitmap Index Scan on flights_no_status_idx  (cost=0.00..4.93 rows=85 width=0) (actual time=0.011..0.011 rows=121 loops=1)
+              Index Cond: (flight_no = 'PG0384'::bpchar)
+              Buffers: shared hit=2
+        ->  Bitmap Index Scan on flights_no_status_idx  (cost=0.00..752.77 rows=554 width=0) (actual time=0.184..0.184 rows=518 loops=1)
+              Index Cond: ((status)::text = 'On Time'::text)
+              Buffers: shared hit=64
+Planning:
+  Buffers: shared hit=6
+Planning Time: 0.078 ms
+Execution Time: 0.587 ms
+
+
+
+
