@@ -1,0 +1,75 @@
+1) Basic Index-Only Scan on a Single Column
+
+explain (analyze,buffers) select flight_no  from flights where flight_no = 'PG0402'
+
+Index Only Scan using flights_flight_no_scheduled_departure_key on flights  (cost=0.42..21.84 rows=85 width=7) (actual time=1.316..1.324 rows=121 loops=1)
+  Index Cond: (flight_no = 'PG0402'::bpchar)
+  Heap Fetches: 0
+  Buffers: shared read=4
+Planning:
+  Buffers: shared hit=5 read=1
+Planning Time: 0.095 ms
+Execution Time: 1.338 ms
+
+2) Range Query on an Indexed Column
+
+create index flights_departure_idx on flights(scheduled_departure);
+
+explain (analyze,buffers) select scheduled_departure  from flights where scheduled_departure between '2017-09-01 12:25:00.000 +0300' and '2017-09-02 12:25:00.000 +0300'
+
+Index Only Scan using flights_departure_idx on flights  (cost=0.29..85.35 rows=453 width=8) (actual time=0.084..0.176 rows=544 loops=1)
+  Index Cond: ((scheduled_departure >= '2017-09-01 12:25:00+03'::timestamp with time zone) AND (scheduled_departure <= '2017-09-02 12:25:00+03'::timestamp with time zone))
+  Heap Fetches: 0
+  Buffers: shared hit=1 read=3
+Planning:
+  Buffers: shared hit=13 read=1
+Planning Time: 0.256 ms
+Execution Time: 0.242 ms
+
+3) Using Multiple Indexed Columns in the WHERE Clause
+
+explain (analyze,buffers) select flight_no  from flights where scheduled_departure > '2017-09-01 12:25:00.000 +0300' and flight_no = 'PG0402'
+
+Index Only Scan using flights_flight_no_scheduled_departure_key on flights  (cost=0.42..8.62 rows=10 width=7) (actual time=0.012..0.013 rows=13 loops=1)
+  Index Cond: ((flight_no = 'PG0402'::bpchar) AND (scheduled_departure > '2017-09-01 12:25:00+03'::timestamp with time zone))
+  Heap Fetches: 0
+  Buffers: shared hit=4
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.097 ms
+Execution Time: 0.022 ms
+
+4) Multi-Column Index for Index-Only Scan
+
+explain (analyze,buffers) select flight_no, scheduled_departure  from flights where scheduled_departure = '2017-09-01 12:25:00.000 +0300' and flight_no = 'PG0402'
+
+Index Only Scan using flights_flight_no_scheduled_departure_key on flights  (cost=0.42..8.44 rows=1 width=15) (actual time=0.011..0.012 rows=1 loops=1)
+  Index Cond: ((flight_no = 'PG0402'::bpchar) AND (scheduled_departure = '2017-09-01 12:25:00+03'::timestamp with time zone))
+  Heap Fetches: 0
+  Buffers: shared hit=4
+Planning:
+  Buffers: shared hit=6
+Planning Time: 0.092 ms
+Execution Time: 0.020 ms
+
+
+5) Sorting on Indexed Column
+
+Index Only Scan using flights_departure_idx on flights  (cost=0.29..350.16 rows=7421 width=8) (actual time=0.008..0.688 rows=7368 loops=1)
+  Index Cond: (scheduled_departure > '2017-09-01 12:25:00+03'::timestamp with time zone)
+  Heap Fetches: 0
+  Buffers: shared hit=4 read=12
+Planning:
+  Buffers: shared hit=19
+Planning Time: 0.084 ms
+Execution Time: 0.876 ms
+
+explain (analyze,buffers) select scheduled_departure  from flights where scheduled_departure > '2017-09-01 12:25:00.000 +0300' 
+order by scheduled_departure
+
+
+Issues
+- If rows are recently updated, the visibility map may not allow an index-only scan, 
+as PostgreSQL needs to verify row visibility by checking the heap.
+- Adding a non-indexed column in the SELECT clause will force a regular index scan or sequential scan, as PostgreSQL must fetch the full row.
+- 
