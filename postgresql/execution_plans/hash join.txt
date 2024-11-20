@@ -1,0 +1,178 @@
+1) One pass hash - Work mem with all columns
+
+SET work_mem = '128MB';
+EXPLAIN (analyze, buffers)
+SELECT *
+FROM bookings b
+JOIN tickets t ON b.book_ref = t.book_ref;
+
+Hash Join  (cost=17176.24..41563.28 rows=829071 width=125) (actual time=193.955..544.697 rows=829071 loops=1)
+  Hash Cond: (t.book_ref = b.book_ref)
+  Buffers: shared hit=32 read=17712
+  ->  Seq Scan on tickets t  (cost=0.00..22210.71 rows=829071 width=104) (actual time=0.010..57.553 rows=829071 loops=1)
+        Buffers: shared hit=32 read=13888
+  ->  Hash  (cost=9758.33..9758.33 rows=593433 width=21) (actual time=192.168..192.168 rows=593433 loops=1)
+        Buckets: 1048576  Batches: 1  Memory Usage: 40018kB
+        Buffers: shared read=3824
+        ->  Seq Scan on bookings b  (cost=0.00..9758.33 rows=593433 width=21) (actual time=0.844..91.436 rows=593433 loops=1)
+              Buffers: shared read=3824
+Planning:
+  Buffers: shared hit=77 read=18
+Planning Time: 6.368 ms
+Execution Time: 567.385 ms
+
+Batches: 1 - one pass hash.
+Buckets - number of buckets;
+Memory Usage - memory (depends on work_mem);
+
+2) One pass hash - Work mem with one column
+
+
+SET work_mem = '128MB';
+EXPLAIN (analyze,buffers)
+SELECT b.book_ref
+FROM bookings b
+JOIN tickets t ON b.book_ref = t.book_ref;
+
+
+Hash Join  (cost=17176.67..40349.05 rows=829071 width=7) (actual time=141.821..394.474 rows=829071 loops=1)
+  Hash Cond: (t.book_ref = b.book_ref)
+  Buffers: shared hit=3829 read=2097
+  ->  Index Only Scan using tickets_book_ref_idx on tickets t  (cost=0.42..20996.49 rows=829071 width=7) (actual time=0.008..74.791 rows=829071 loops=1)
+        Heap Fetches: 0
+        Buffers: shared hit=5 read=2097
+  ->  Hash  (cost=9758.33..9758.33 rows=593433 width=7) (actual time=140.227..140.228 rows=593433 loops=1)
+        Buckets: 1048576  Batches: 1  Memory Usage: 30794kB
+        Buffers: shared hit=3824
+        ->  Seq Scan on bookings b  (cost=0.00..9758.33 rows=593433 width=7) (actual time=0.007..38.632 rows=593433 loops=1)
+              Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.130 ms
+Execution Time: 416.441 ms
+
+Memory Usage - now 30794 with one column;
+
+
+
+3) Two pass hash
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no;
+
+Hash Join  (cost=45529.10..140275.36 rows=2360335 width=136) (actual time=486.448..3001.484 rows=2360335 loops=1)
+  Hash Cond: (tf.ticket_no = t.ticket_no)
+  Buffers: shared read=33640, temp read=26535 written=26535
+  ->  Seq Scan on ticket_flights tf  (cost=0.00..43323.35 rows=2360335 width=32) (actual time=6.810..377.518 rows=2360335 loops=1)
+        Buffers: shared read=19720
+  ->  Hash  (cost=22210.71..22210.71 rows=829071 width=104) (actual time=479.385..479.386 rows=829071 loops=1)
+        Buckets: 65536  Batches: 16  Memory Usage: 7437kB
+        Buffers: shared read=13920, temp written=11814
+        ->  Seq Scan on tickets t  (cost=0.00..22210.71 rows=829071 width=104) (actual time=1.141..276.564 rows=829071 loops=1)
+              Buffers: shared read=13920
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.143 ms
+JIT:
+  Functions: 10
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.257 ms, Inlining 0.000 ms, Optimization 3.033 ms, Emission 31.255 ms, Total 34.544 ms
+Execution Time: 3066.724 ms
+
+JIT - compiles certain parts of the query execution plan into machine code on the fly to speed up query execution. 
+JIT is used to optimise heavy calculations such as filters, calculated columns, and complex expressions.
+
+for every batch 16 it is 7437 memory in bytes
+
+
+4) Error in planning - incorrect statistics
+
+EXPLAIN (analyze, costs off, timing off, summary off)
+SELECT *
+FROM bookings_copy b
+JOIN tickets t ON b.book_ref = t.book_ref;
+
+
+Hash Join (actual rows=2949857 loops=1)
+	Hash Cond: (t.book_ref = b.book_ref)
+	−> Seq Scan on tickets t (actual rows=2949857 loops=1)
+	−> Hash (actual rows=2111110 loops=1)
+		Buckets: 131072 (originally 131072) Batches: 16 (originally 4) Memory Usage: 8085kB
+		−> Seq Scan on bookings_copy b (actual rows=2111110 loops=1)
+		
+		
+Originally planner decided to use 4 batches but with incorrect statistics it has increased to 16.
+
+
+
+It is important
+The hash table contains only really necessary fields (the responsibility of the query author) try not to USE SELECT *
+The hash table is built on a smaller set of rows (the planner's responsibility)
+
+
+5) Aggregate
+
+SET work_mem = '128MB';
+SET enable_parallel_hash = off;
+EXPLAIN (analyze, buffers)
+SELECT count(*)
+FROM bookings b
+JOIN tickets t ON t.book_ref = b.book_ref;
+RESET enable_parallel_hash;
+
+Finalize Aggregate  (cost=36107.12..36107.13 rows=1 width=8) (actual time=257.899..273.973 rows=1 loops=1)
+  Buffers: shared hit=13700
+  ->  Gather  (cost=36106.91..36107.12 rows=2 width=8) (actual time=255.564..273.968 rows=3 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=13700
+        ->  Partial Aggregate  (cost=35106.91..35106.92 rows=1 width=8) (actual time=243.385..243.386 rows=1 loops=3)
+              Buffers: shared hit=13700
+              ->  Hash Join  (cost=17176.67..34243.29 rows=345446 width=0) (actual time=149.676..231.750 rows=276357 loops=3)
+                    Hash Cond: (t.book_ref = b.book_ref)
+                    Buffers: shared hit=13700
+                    ->  Parallel Index Only Scan using tickets_book_ref_idx on tickets t  (cost=0.42..16160.24 rows=345446 width=7) (actual time=0.096..21.167 rows=276357 loops=3)
+                          Heap Fetches: 0
+                          Buffers: shared hit=2104
+                    ->  Hash  (cost=9758.33..9758.33 rows=593433 width=7) (actual time=147.459..147.460 rows=593433 loops=3)
+                          Buckets: 1048576  Batches: 1  Memory Usage: 30794kB
+                          Buffers: shared hit=11472
+                          ->  Seq Scan on bookings b  (cost=0.00..9758.33 rows=593433 width=7) (actual time=0.025..40.751 rows=593433 loops=3)
+                                Buffers: shared hit=11472
+Planning:
+  Buffers: shared hit=22
+Planning Time: 0.207 ms
+Execution Time: 274.916 ms
+
+6) Parallel one time pass hash
+
+SET work_mem = '64MB';
+EXPLAIN (analyze, buffers)
+SELECT count(*)
+FROM bookings b
+JOIN tickets t ON t.book_ref = b.book_ref;
+
+Finalize Aggregate  (cost=28318.32..28318.33 rows=1 width=8) (actual time=190.365..193.863 rows=1 loops=1)
+  Buffers: shared hit=6053
+  ->  Gather  (cost=28318.10..28318.31 rows=2 width=8) (actual time=189.173..193.858 rows=3 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=6053
+        ->  Partial Aggregate  (cost=27318.10..27318.11 rows=1 width=8) (actual time=178.488..178.490 rows=1 loops=3)
+              Buffers: shared hit=6053
+              ->  Parallel Hash Join  (cost=9387.86..26454.49 rows=345446 width=0) (actual time=70.089..165.614 rows=276357 loops=3)
+                    Hash Cond: (t.book_ref = b.book_ref)
+                    Buffers: shared hit=6053
+                    ->  Parallel Index Only Scan using tickets_book_ref_idx on tickets t  (cost=0.42..16160.24 rows=345446 width=7) (actual time=0.083..25.192 rows=276357 loops=3)
+                          Heap Fetches: 0
+                          Buffers: shared hit=2105
+                    ->  Parallel Hash  (cost=6296.64..6296.64 rows=247264 width=7) (actual time=68.922..68.923 rows=197811 loops=3)
+                          Buckets: 1048576  Batches: 1  Memory Usage: 31456kB
+                          Buffers: shared hit=3824
+                          ->  Parallel Seq Scan on bookings b  (cost=0.00..6296.64 rows=247264 width=7) (actual time=0.005..17.833 rows=197811 loops=3)
+                                Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.150 ms
+Execution Time: 193.889 ms

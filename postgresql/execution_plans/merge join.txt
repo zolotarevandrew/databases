@@ -1,0 +1,182 @@
+1) Simple join with order by
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+ORDER BY t.ticket_no;
+
+Merge Join  (cost=0.85..231516.35 rows=2360335 width=136) (actual time=31.635..6215.151 rows=2360335 loops=1)
+  Merge Cond: (t.ticket_no = tf.ticket_no)
+  Buffers: shared hit=2246576 read=143519
+  ->  Index Scan using tickets_pkey on tickets t  (cost=0.42..39139.49 rows=829071 width=104) (actual time=0.744..193.701 rows=829071 loops=1)
+        Buffers: shared hit=5583 read=17066
+  ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..160799.99 rows=2360335 width=32) (actual time=0.638..5133.679 rows=2360335 loops=1)
+        Buffers: shared hit=2240993 read=126453
+Planning:
+  Buffers: shared hit=168 read=22
+Planning Time: 5.885 ms
+JIT:
+  Functions: 7
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.232 ms, Inlining 0.000 ms, Optimization 1.981 ms, Emission 28.257 ms, Total 30.470 ms
+Execution Time: 6488.877 ms
+
+
+ EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+JOIN ticket_flights tf ON t.ticket_no = tf.ticket_no
+JOIN boarding_passes bp ON bp.ticket_no = tf.ticket_no
+AND bp.flight_id = tf.flight_id
+ORDER BY t.ticket_no;
+
+Merge Join  (cost=1.28..368743.99 rows=1894295 width=161) (actual time=11.017..5907.107 rows=1894295 loops=1)
+  Merge Cond: ((t.ticket_no = tf.ticket_no) AND (bp.flight_id = tf.flight_id))
+  Buffers: shared hit=3897575 read=345000
+  ->  Merge Join  (cost=0.85..186668.90 rows=1894295 width=129) (actual time=10.983..3538.644 rows=1894295 loops=1)
+        Merge Cond: (bp.ticket_no = t.ticket_no)
+        Buffers: shared hit=1768687 read=107991
+        ->  Index Scan using boarding_passes_pkey on boarding_passes bp  (cost=0.43..121778.05 rows=1894295 width=25) (actual time=0.742..2749.200 rows=1894295 loops=1)
+              Buffers: shared hit=1763106 read=90932
+        ->  Index Scan using tickets_pkey on tickets t  (cost=0.42..39139.49 rows=829071 width=104) (actual time=0.076..142.817 rows=828682 loops=1)
+              Buffers: shared hit=5581 read=17059
+  ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..160799.99 rows=2360335 width=32) (actual time=0.026..1511.427 rows=2358794 loops=1)
+        Buffers: shared hit=2128888 read=237009
+Planning:
+  Buffers: shared hit=187 read=32
+Planning Time: 6.628 ms
+JIT:
+  Functions: 15
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.374 ms, Inlining 0.000 ms, Optimization 0.245 ms, Emission 9.911 ms, Total 10.531 ms
+Execution Time: 5962.941 ms
+
+2) Full Join
+
+SET enable_hashjoin = off; --disabling hash join.
+EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+FULL JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+ORDER BY t.ticket_no;
+
+Sort  (cost=804071.42..809972.26 rows=2360335 width=136) (actual time=4064.134..4808.880 rows=2360335 loops=1)
+  Sort Key: t.ticket_no
+  Sort Method: external merge  Disk: 343200kB
+  Buffers: shared hit=2250997 read=139098, temp read=85797 written=85907
+  ->  Merge Full Join  (cost=0.85..231516.35 rows=2360335 width=136) (actual time=63.471..2287.741 rows=2360335 loops=1)
+        Merge Cond: (t.ticket_no = tf.ticket_no)
+        Buffers: shared hit=2250997 read=139098
+        ->  Index Scan using tickets_pkey on tickets t  (cost=0.42..39139.49 rows=829071 width=104) (actual time=0.064..134.076 rows=829071 loops=1)
+              Buffers: shared hit=5580 read=17069
+        ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..160799.99 rows=2360335 width=32) (actual time=0.040..1345.634 rows=2360335 loops=1)
+              Buffers: shared hit=2245417 read=122029
+Planning Time: 0.086 ms
+JIT:
+  Functions: 7
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.350 ms, Inlining 1.683 ms, Optimization 39.054 ms, Emission 22.617 ms, Total 63.704 ms
+Execution Time: 4895.978 ms
+
+For full join result has to be resorted again because of null values.
+
+3) Cant use Nested Loop and Merge join here...
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+FULL JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+AND tf.amount > 0
+ORDER BY t.ticket_no;
+
+Sort  (cost=10000712830.44..10000718731.28 rows=2360335 width=136) (actual time=9174.100..10647.413 rows=2360335 loops=1)
+  Sort Key: t.ticket_no
+  Sort Method: external merge  Disk: 343216kB
+  Buffers: shared hit=15827 read=17813, temp read=112336 written=112446
+  ->  Hash Full Join  (cost=10000045529.10..10000140275.37 rows=2360335 width=136) (actual time=309.479..1699.479 rows=2360335 loops=1)
+        Hash Cond: (tf.ticket_no = t.ticket_no)
+        Join Filter: (tf.amount > '0'::numeric)
+        Buffers: shared hit=15827 read=17813, temp read=26535 written=26535
+        ->  Seq Scan on ticket_flights tf  (cost=0.00..43323.35 rows=2360335 width=32) (actual time=0.006..119.552 rows=2360335 loops=1)
+              Buffers: shared hit=15470 read=4250
+        ->  Hash  (cost=22210.71..22210.71 rows=829071 width=104) (actual time=309.246..309.247 rows=829071 loops=1)
+              Buckets: 65536  Batches: 16  Memory Usage: 7437kB
+              Buffers: shared hit=357 read=13563, temp written=11814
+              ->  Seq Scan on tickets t  (cost=0.00..22210.71 rows=829071 width=104) (actual time=0.009..61.895 rows=829071 loops=1)
+                    Buffers: shared hit=357 read=13563
+Planning:
+  Buffers: shared hit=50 read=9
+Planning Time: 0.198 ms
+JIT:
+  Functions: 12
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+  Timing: Generation 0.431 ms, Inlining 16.671 ms, Optimization 53.519 ms, Emission 32.390 ms, Total 103.010 ms
+Execution Time: 10742.443 ms
+
+4) Force sort
+
+EXPLAIN (analyze, buffers)
+SELECT *
+FROM flights f
+JOIN airports_data dep ON f.departure_airport = dep.airport_code
+ORDER BY dep.airport_code
+
+Merge Join  (cost=9221.21..10206.68 rows=65664 width=208) (actual time=39.656..60.990 rows=65664 loops=1)
+  Merge Cond: (f.departure_airport = dep.airport_code)
+  Buffers: shared hit=2 read=833, temp read=639 written=640
+  ->  Sort  (cost=9213.68..9377.84 rows=65664 width=63) (actual time=39.574..47.031 rows=65664 loops=1)
+        Sort Key: f.departure_airport
+        Sort Method: external merge  Disk: 5112kB
+        Buffers: shared read=832, temp read=639 written=640
+        ->  Seq Scan on flights f  (cost=0.00..1488.64 rows=65664 width=63) (actual time=0.826..17.498 rows=65664 loops=1)
+              Buffers: shared read=832
+  ->  Sort  (cost=7.52..7.78 rows=104 width=145) (actual time=0.075..0.085 rows=104 loops=1)
+        Sort Key: dep.airport_code
+        Sort Method: quicksort  Memory: 43kB
+        Buffers: shared hit=2 read=1
+        ->  Seq Scan on airports_data dep  (cost=0.00..4.04 rows=104 width=145) (actual time=0.009..0.020 rows=104 loops=1)
+              Buffers: shared hit=2 read=1
+Planning:
+  Buffers: shared hit=140 read=27
+Planning Time: 5.914 ms
+Execution Time: 63.247 ms
+
+
+quick sort - only in Memory
+
+5) Top n heap sort
+
+EXPLAIN (analyze, timing off, summary off)
+SELECT * FROM seats
+ORDER BY seat_no LIMIT 100;
+
+
+Limit  (cost=72.57..72.82 rows=100 width=15) (actual time=1.235..1.243 rows=100 loops=1)
+  Buffers: shared hit=3 read=8
+  ->  Sort  (cost=72.57..75.91 rows=1339 width=15) (actual time=1.234..1.238 rows=100 loops=1)
+        Sort Key: seat_no
+        Sort Method: top-N heapsort  Memory: 32kB
+        Buffers: shared hit=3 read=8
+        ->  Seq Scan on seats  (cost=0.00..21.39 rows=1339 width=15) (actual time=0.413..0.899 rows=1339 loops=1)
+              Buffers: shared read=8
+Planning:
+  Buffers: shared hit=30 read=3
+Planning Time: 0.870 ms
+Execution Time: 1.255 ms
+
+6) Incremental sort
+
+EXPLAIN (analyze, buffers)
+SELECT *
+FROM bookings
+ORDER BY total_amount, book_date;
+
+Incremental Sort  (cost=23.45..61847.91 rows=593433 width=21) (actual time=37.300..696.682 rows=593433 loops=1)
+  Sort Key: total_amount, book_date
+  Presorted Key: total_amount
+  Full-sort Groups: 1956  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+  Pre-sorted Groups: 1868  Sort Method: quicksort  Average Memory: 737kB  Peak Memory: 781kB
+  Buffers: shared hit=495479 read=5404
+  ->  Index Scan using bookings_total_amount on bookings  (cost=0.42..30725.75 rows=593433 width=21) (actual time=1.501..514.473 rows=593433 loops=1)
+        Buffers: shared hit=495470 read=5404
+Planning:
+  Buffers: shared hit=60 read=5
+Planning Time: 2.442 ms
+Execution Time: 711.039 ms

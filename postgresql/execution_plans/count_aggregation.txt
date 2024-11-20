@@ -1,0 +1,268 @@
+1) Simple count *
+
+EXPLAIN (analyze, buffers)
+SELECT count(*)
+FROM bookings;
+
+Finalize Aggregate  (cost=7915.01..7915.02 rows=1 width=8) (actual time=119.089..120.539 rows=1 loops=1)
+  Buffers: shared read=3824
+  ->  Gather  (cost=7914.80..7915.01 rows=2 width=8) (actual time=119.016..120.534 rows=3 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared read=3824
+        ->  Partial Aggregate  (cost=6914.80..6914.81 rows=1 width=8) (actual time=115.905..115.906 rows=1 loops=3)
+              Buffers: shared read=3824
+              ->  Parallel Seq Scan on bookings  (cost=0.00..6296.64 rows=247264 width=0) (actual time=0.566..107.001 rows=197811 loops=3)
+                    Buffers: shared read=3824
+Planning:
+  Buffers: shared hit=98 read=9
+Planning Time: 2.681 ms
+Execution Time: 120.630 ms
+
+
+
+COUNT(*) - counts all rows
+COUNT(id) - counts NOT NULL rows.
+
+2) Simple count * with index
+
+create index booking_ref on bookings(book_ref);
+
+EXPLAIN (analyze, buffers)
+SELECT count(book_ref)
+FROM bookings;
+
+
+Finalize Aggregate  (cost=7915.01..7915.02 rows=1 width=8) (actual time=24.597..26.294 rows=1 loops=1)
+  Buffers: shared hit=3824
+  ->  Gather  (cost=7914.80..7915.01 rows=2 width=8) (actual time=24.443..26.288 rows=3 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=3824
+        ->  Partial Aggregate  (cost=6914.80..6914.81 rows=1 width=8) (actual time=22.728..22.729 rows=1 loops=3)
+              Buffers: shared hit=3824
+              ->  Parallel Seq Scan on bookings  (cost=0.00..6296.64 rows=247264 width=7) (actual time=0.005..10.702 rows=197811 loops=3)
+                    Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=16 read=1
+Planning Time: 0.144 ms
+Execution Time: 26.311 ms
+
+
+3) Selective count *
+
+EXPLAIN (analyze, buffers)
+SELECT count(book_date)
+FROM bookings where book_date = '2017-06-14 23:50:00.000 +0300';
+
+Aggregate  (cost=8.53..8.54 rows=1 width=8) (actual time=0.016..0.017 rows=1 loops=1)
+  Buffers: shared hit=4
+  ->  Index Only Scan using bookings_date on bookings  (cost=0.42..8.51 rows=5 width=8) (actual time=0.012..0.014 rows=4 loops=1)
+        Index Cond: (book_date = '2017-06-14 23:50:00+03'::timestamp with time zone)
+        Heap Fetches: 0
+        Buffers: shared hit=4
+Planning Time: 0.051 ms
+Execution Time: 0.030 ms
+
+EXPLAIN (analyze, buffers)
+SELECT count(*)
+FROM bookings where book_date between '2017-06-14 23:50:00.000 +0300' and '2017-06-15 23:50:00.000 +0300';
+
+Aggregate  (cost=319.86..319.87 rows=1 width=8) (actual time=3.104..3.105 rows=1 loops=1)
+  Buffers: shared hit=4 read=9
+  ->  Index Only Scan using bookings_date on bookings  (cost=0.42..305.70 rows=5664 width=8) (actual time=0.012..2.834 rows=5524 loops=1)
+        Index Cond: ((book_date >= '2017-06-14 23:50:00+03'::timestamp with time zone) AND (book_date <= '2017-06-15 23:50:00+03'::timestamp with time zone))
+        Heap Fetches: 0
+        Buffers: shared hit=4 read=9
+Planning:
+  Buffers: shared hit=11
+Planning Time: 0.072 ms
+Execution Time: 3.121 ms
+
+
+4) Distinct 
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT COUNT(DISTINCT book_date)
+FROM bookings;
+
+Aggregate  (cost=14397.50..14397.51 rows=1 width=8) (actual time=84.985..84.986 rows=1 loops=1)
+  Buffers: shared hit=12 read=944
+  ->  Index Only Scan using bookings_date on bookings  (cost=0.42..12913.92 rows=593433 width=8) (actual time=2.008..51.785 rows=593433 loops=1)
+        Heap Fetches: 0
+        Buffers: shared hit=12 read=944
+Planning Time: 0.046 ms
+Execution Time: 85.004 ms
+
+
+PostgreSQL can efficiently deduplicate values during the scan because the index is sorted.
+
+5) With composite index and second column
+
+CREATE INDEX flight_no_date ON flights(flight_no, scheduled_departure);
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT COUNT(flight_no)
+FROM flights
+WHERE scheduled_departure = '2017-09-01 12:25:00.000 +0300';
+
+Aggregate  (cost=19.55..19.56 rows=1 width=8) (actual time=2.616..2.618 rows=1 loops=1)
+  Buffers: shared hit=1 read=7
+  ->  Bitmap Heap Scan on flights  (cost=4.32..19.54 rows=4 width=7) (actual time=0.961..2.608 rows=6 loops=1)
+        Recheck Cond: (scheduled_departure = '2017-09-01 12:25:00+03'::timestamp with time zone)
+        Heap Blocks: exact=6
+        Buffers: shared hit=1 read=7
+        ->  Bitmap Index Scan on flights_departure_idx  (cost=0.00..4.32 rows=4 width=0) (actual time=0.955..0.955 rows=6 loops=1)
+              Index Cond: (scheduled_departure = '2017-09-01 12:25:00+03'::timestamp with time zone)
+              Buffers: shared read=2
+Planning Time: 0.061 ms
+Execution Time: 2.664 ms
+
+6) With composite index and first column
+
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT COUNT(scheduled_departure)
+FROM flights
+WHERE flight_no  = 'PG0384';
+
+Aggregate  (cost=22.05..22.06 rows=1 width=8) (actual time=1.860..1.861 rows=1 loops=1)
+  Buffers: shared read=4
+  ->  Index Only Scan using flights_flight_no_scheduled_departure_key on flights  (cost=0.42..21.84 rows=85 width=8) (actual time=1.841..1.850 rows=121 loops=1)
+        Index Cond: (flight_no = 'PG0384'::bpchar)
+        Heap Fetches: 0
+        Buffers: shared read=4
+Planning Time: 0.062 ms
+Execution Time: 1.877 ms
+
+7) Group by Group Aggregate with index
+
+EXPLAIN (analyze, buffers) SELECT status, count(*) from flights group by status
+
+GroupAggregate  (cost=0.29..1687.73 rows=6 width=16) (actual time=8.625..10.594 rows=6 loops=1)
+  Group Key: status
+  Buffers: shared hit=1 read=58
+  ->  Index Only Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..1359.35 rows=65664 width=8) (actual time=1.940..6.328 rows=65664 loops=1)
+        Heap Fetches: 0
+        Buffers: shared hit=1 read=58
+Planning:
+  Buffers: shared hit=13
+Planning Time: 0.076 ms
+Execution Time: 10.616 ms
+
+8) Group by Hash Aggregate
+
+EXPLAIN (analyze,buffers)
+SELECT fare_conditions, count(*)
+FROM seats
+GROUP BY fare_conditions;
+
+HashAggregate  (cost=28.09..28.12 rows=3 width=16) (actual time=1.349..1.350 rows=3 loops=1)
+  Group Key: fare_conditions
+  Batches: 1  Memory Usage: 24kB
+  Buffers: shared read=8
+  ->  Seq Scan on seats  (cost=0.00..21.39 rows=1339 width=8) (actual time=0.527..1.040 rows=1339 loops=1)
+        Buffers: shared read=8
+Planning:
+  Buffers: shared hit=21 read=1
+Planning Time: 1.817 ms
+Execution Time: 1.392 ms
+
+
+EXPLAIN (analyze,buffers)
+SELECT DISTINCT fare_conditions
+FROM seats;
+
+HashAggregate  (cost=24.74..24.77 rows=3 width=8) (actual time=0.381..0.382 rows=3 loops=1)
+  Group Key: fare_conditions
+  Batches: 1  Memory Usage: 24kB
+  Buffers: shared hit=8
+  ->  Seq Scan on seats  (cost=0.00..21.39 rows=1339 width=8) (actual time=0.006..0.090 rows=1339 loops=1)
+        Buffers: shared hit=8
+Planning Time: 0.083 ms
+Execution Time: 0.396 ms
+
+
+EXPLAIN (analyze, buffers) SELECT amount, count(*)
+FROM ticket_flights
+GROUP BY amount;
+
+Finalize GroupAggregate  (cost=35488.75..35570.33 rows=322 width=14) (actual time=633.009..634.300 rows=338 loops=1)
+  Group Key: amount
+  Buffers: shared hit=14 read=19720
+  ->  Gather Merge  (cost=35488.75..35563.89 rows=644 width=14) (actual time=632.998..634.129 rows=1013 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=14 read=19720
+        ->  Sort  (cost=34488.73..34489.53 rows=322 width=14) (actual time=630.715..630.728 rows=338 loops=3)
+              Sort Key: amount
+              Sort Method: quicksort  Memory: 38kB
+              Buffers: shared hit=14 read=19720
+              Worker 0:  Sort Method: quicksort  Memory: 38kB
+              Worker 1:  Sort Method: quicksort  Memory: 38kB
+              ->  Partial HashAggregate  (cost=34472.09..34475.31 rows=322 width=14) (actual time=630.606..630.637 rows=338 loops=3)
+                    Group Key: amount
+                    Batches: 1  Memory Usage: 61kB
+                    Buffers: shared read=19720
+                    Worker 0:  Batches: 1  Memory Usage: 61kB
+                    Worker 1:  Batches: 1  Memory Usage: 61kB
+                    ->  Parallel Seq Scan on ticket_flights  (cost=0.00..29554.73 rows=983473 width=6) (actual time=0.576..446.209 rows=786778 loops=3)
+                          Buffers: shared read=19720
+Planning:
+  Buffers: shared hit=7
+Planning Time: 0.104 ms
+Execution Time: 634.355 ms
+
+9) Group by with sort
+
+explain (analyze, buffers) 
+SELECT COUNT(*), aircraft_code FROM flights GROUP BY aircraft_code  ORDER BY aircraft_code;
+
+Sort  (cost=1687.87..1687.89 rows=8 width=12) (actual time=12.149..12.150 rows=8 loops=1)
+  Sort Key: aircraft_code
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=59
+  ->  HashAggregate  (cost=1687.67..1687.75 rows=8 width=12) (actual time=12.138..12.140 rows=8 loops=1)
+        Group Key: aircraft_code
+        Batches: 1  Memory Usage: 24kB
+        Buffers: shared hit=59
+        ->  Index Only Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..1359.35 rows=65664 width=4) (actual time=0.013..3.915 rows=65664 loops=1)
+              Heap Fetches: 0
+              Buffers: shared hit=59
+Planning Time: 0.057 ms
+Execution Time: 12.171 ms
+
+
+10) WindowAgg - Window Aggregation
+
+explain (analyze, buffers) 
+SELECT book_ref, sum(total_amount) OVER (PARTITION BY book_ref) FROM bookings;
+
+WindowAgg  (cost=0.42..28150.42 rows=593433 width=39) (actual time=0.022..538.925 rows=593433 loops=1)
+  Buffers: shared hit=8 read=5396
+  ->  Index Scan using booking_ref on bookings  (cost=0.42..19248.92 rows=593433 width=13) (actual time=0.014..135.275 rows=593433 loops=1)
+        Buffers: shared hit=8 read=5396
+Planning Time: 0.047 ms
+Execution Time: 554.320 ms
+
+11) Unique - distinct
+
+explain (analyze, buffers) 
+SELECT distinct status  FROM flights;
+
+Unique  (cost=0.29..1523.51 rows=6 width=8) (actual time=2.297..12.167 rows=6 loops=1)
+  Buffers: shared read=59
+  ->  Index Only Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..1359.35 rows=65664 width=8) (actual time=2.295..8.027 rows=65664 loops=1)
+        Heap Fetches: 0
+        Buffers: shared read=59
+Planning:
+  Buffers: shared hit=7 read=1
+Planning Time: 0.103 ms
+Execution Time: 12.190 ms
+
+
+
+
+
+
+

@@ -1,0 +1,214 @@
+1) Cartesian product + Materialize
+
+EXPLAIN (analyze, buffers) SELECT * FROM aircrafts_data a1
+CROSS JOIN aircrafts_data a2
+WHERE a2.range > 5000
+
+Nested Loop  (cost=0.00..2.55 rows=27 width=104) (actual time=0.285..0.295 rows=45 loops=1)
+  Buffers: shared hit=1 read=1
+  ->  Seq Scan on aircrafts_data a1  (cost=0.00..1.09 rows=9 width=52) (actual time=0.273..0.273 rows=9 loops=1)
+        Buffers: shared read=1
+  ->  Materialize  (cost=0.00..1.13 rows=3 width=52) (actual time=0.001..0.001 rows=5 loops=9)
+        Buffers: shared hit=1
+        ->  Seq Scan on aircrafts_data a2  (cost=0.00..1.11 rows=3 width=52) (actual time=0.004..0.005 rows=5 loops=1)
+              Filter: (range > 5000)
+              Rows Removed by Filter: 4
+              Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=63 read=3
+Planning Time: 1.058 ms
+Execution Time: 0.315 ms
+
+Materialize 
+< 4 mb - caches
+> 4 mb - saves on disk
+
+2) Simple Equi join
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM tickets t
+JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+WHERE t.ticket_no = '0005432000284';
+
+Nested Loop  (cost=0.85..24.92 rows=3 width=136) (actual time=0.585..0.586 rows=0 loops=1)
+  Buffers: shared read=3
+  ->  Index Scan using tickets_pkey on tickets t  (cost=0.42..8.44 rows=1 width=104) (actual time=0.584..0.585 rows=0 loops=1)
+        Index Cond: (ticket_no = '0005432000284'::bpchar)
+        Buffers: shared read=3
+  ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..16.44 rows=3 width=32) (never executed)
+        Index Cond: (ticket_no = '0005432000284'::bpchar)
+Planning:
+  Buffers: shared hit=84 read=6
+Planning Time: 7.745 ms
+Execution Time: 0.608 ms
+
+3) Inner loop Index scan 
+
+CREATE INDEX ON tickets(book_ref);
+
+EXPLAIN (analyze, buffers)  SELECT *
+FROM tickets t
+JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+WHERE t.book_ref = '03A76D'
+
+
+Nested Loop  (cost=0.85..45.41 rows=6 width=136) (actual time=0.036..0.050 rows=8 loops=1)
+  Buffers: shared hit=14 read=4
+  ->  Index Scan using tickets_book_ref_idx on tickets t  (cost=0.42..12.46 rows=2 width=104) (actual time=0.025..0.025 rows=2 loops=1)
+        Index Cond: (book_ref = '03A76D'::bpchar)
+        Buffers: shared read=4
+  ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..16.44 rows=3 width=32) (actual time=0.007..0.010 rows=4 loops=2)
+        Index Cond: (ticket_no = t.ticket_no)
+        Buffers: shared hit=14
+Planning:
+  Buffers: shared hit=34 read=1
+Planning Time: 0.311 ms
+Execution Time: 0.062 ms
+
+for every outer row we will search through index scan for each inner rows.
+
+4) Memoize
+
+EXPLAIN SELECT *
+FROM flights f
+JOIN aircrafts_data a ON f.aircraft_code = a.aircraft_code
+WHERE f.flight_no = 'PG0003';
+
+
+Nested Loop (actual rows=113 loops=1)
+	−> Bitmap Heap Scan on flights f
+		(actual rows=113 loops=1)
+		Recheck Cond: (flight_no = 'PG0003'::bpchar)
+		Heap Blocks: exact=2
+		−> Bitmap Index Scan on flights_flight_no_scheduled_depart...
+			(actual rows=113 loops=1)
+			Index Cond: (flight_no = 'PG0003'::bpchar)
+	−> Memoize (actual rows=1 loops=113)
+		Cache Key: f.aircraft_code
+		Cache Mode: logical
+		Hits: 112 Misses: 1 Evictions: 0 Overflows: 0 Memory
+		Usage: 1kB
+			−> Index Scan using aircrafts_pkey on aircrafts_data a
+				(actual rows=1 loops=1)
+				Index Cond: (aircraft_code = f.aircraft_code)
+				
+Memoize just uses cache for unique pair rows.
+
+Misses - 1, cache miss.
+Hits - 112, hits the cache.
+1 kb - memory.
+
+5) Left join
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM ticket_flights tf
+LEFT JOIN boarding_passes bp ON bp.ticket_no = tf.ticket_no
+AND bp.flight_id = tf.flight_id
+WHERE tf.ticket_no = '0005434026720' and tf.flight_id = 82977;
+
+Nested Loop Left Join  (cost=0.86..16.91 rows=1 width=57) (actual time=0.730..0.731 rows=0 loops=1)
+  Buffers: shared hit=1 read=2
+  ->  Index Scan using ticket_flights_pkey on ticket_flights tf  (cost=0.43..8.45 rows=1 width=32) (actual time=0.730..0.730 rows=0 loops=1)
+        Index Cond: ((ticket_no = '0005434026720'::bpchar) AND (flight_id = 82977))
+        Buffers: shared hit=1 read=2
+  ->  Index Scan using boarding_passes_pkey on boarding_passes bp  (cost=0.43..8.45 rows=1 width=25) (never executed)
+        Index Cond: ((ticket_no = '0005434026720'::bpchar) AND (flight_id = 82977))
+Planning:
+  Buffers: shared hit=61 read=3
+Planning Time: 2.363 ms
+Execution Time: 0.744 ms
+
+
+Issues
+- Doesnt support Right and Full join, because it has to read all inner rows,
+support left join because it always read outer rows.
+
+
+5) Anti join
+
+Returns rows of the first set only if there is no match in second set.
+
+
+EXPLAIN (analyze, buffers) SELECT *
+FROM aircrafts a
+WHERE NOT EXISTS (
+SELECT * FROM seats s WHERE s.aircraft_code = a.aircraft_code
+);
+
+OR
+
+EXPLAIN SELECT a.*
+FROM aircrafts a
+LEFT JOIN seats s ON a.aircraft_code = s.aircraft_code
+WHERE s.aircraft_code IS NULL;
+
+
+Nested Loop Anti Join  (cost=0.28..4.65 rows=1 width=52) (actual time=1.299..1.300 rows=0 loops=1)
+  Buffers: shared hit=14 read=6
+  ->  Seq Scan on aircrafts_data ml  (cost=0.00..1.09 rows=9 width=52) (actual time=0.008..0.010 rows=9 loops=1)
+        Buffers: shared hit=1
+  ->  Index Only Scan using seats_pkey on seats s  (cost=0.28..5.55 rows=149 width=4) (actual time=0.142..0.142 rows=1 loops=9)
+        Index Cond: (aircraft_code = ml.aircraft_code)
+        Heap Fetches: 0
+        Buffers: shared hit=13 read=6
+Planning:
+  Buffers: shared hit=29 read=1
+Planning Time: 0.695 ms
+Execution Time: 4.210 ms
+
+
+6) Semi join
+
+Returns rows of the first set only if there match in second set.
+
+EXPLAIN (analyze, buffers)  SELECT *
+FROM aircrafts a
+WHERE EXISTS (
+SELECT * FROM seats s WHERE s.aircraft_code = a.aircraft_code
+);
+
+Nested Loop Semi Join  (cost=0.28..6.67 rows=9 width=52) (actual time=2.404..2.487 rows=9 loops=1)
+  Buffers: shared hit=34 read=1
+  ->  Seq Scan on aircrafts_data ml  (cost=0.00..1.09 rows=9 width=52) (actual time=0.023..0.025 rows=9 loops=1)
+        Buffers: shared hit=1
+  ->  Index Only Scan using seats_pkey on seats s  (cost=0.28..5.55 rows=149 width=4) (actual time=0.009..0.009 rows=1 loops=9)
+        Index Cond: (aircraft_code = ml.aircraft_code)
+        Heap Fetches: 0
+        Buffers: shared hit=19
+Planning Time: 0.182 ms
+Execution Time: 2.503 ms
+
+
+7) Parallel JOIN
+outer rows will be read in Parallel
+
+EXPLAIN (analyze, buffers) SELECT t.passenger_name
+FROM tickets t
+JOIN ticket_flights tf ON tf.ticket_no = t.ticket_no
+JOIN flights f ON f.flight_id = tf.flight_id
+WHERE f.flight_id = 12345;
+
+
+Nested Loop  (cost=1000.72..33316.13 rows=82 width=16) (actual time=66.332..421.446 rows=69 loops=1)
+  Buffers: shared hit=259 read=19742
+  ->  Index Only Scan using flights_pkey on flights f  (cost=0.29..8.31 rows=1 width=4) (actual time=0.951..0.954 rows=1 loops=1)
+        Index Cond: (flight_id = 12345)
+        Heap Fetches: 0
+        Buffers: shared read=3
+  ->  Gather  (cost=1000.42..33307.00 rows=82 width=20) (actual time=65.379..420.481 rows=69 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=259 read=19739
+        ->  Nested Loop  (cost=0.42..32298.80 rows=34 width=20) (actual time=61.950..415.970 rows=23 loops=3)
+              Buffers: shared hit=259 read=19739
+              ->  Parallel Seq Scan on ticket_flights tf  (cost=0.00..32013.41 rows=34 width=18) (actual time=61.094..413.543 rows=23 loops=3)
+                    Filter: (flight_id = 12345)
+                    Rows Removed by Filter: 786755
+                    Buffers: shared read=19720
+              ->  Index Scan using tickets_pkey on tickets t  (cost=0.42..8.39 rows=1 width=30) (actual time=0.103..0.103 rows=1 loops=69)
+                    Index Cond: (ticket_no = tf.ticket_no)
+                    Buffers: shared hit=259 read=19
+Planning:
+  Buffers: shared hit=260 read=29
+Planning Time: 8.244 ms
+Execution Time: 421.504 ms
