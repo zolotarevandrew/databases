@@ -1,0 +1,8 @@
+transactionid и virtualxid — tran number lock;
+relation — table lock;
+tuple — row version lock;
+object — object lock;
+extend — relation file while adding new pages;
+page — page lock;
+advisory — user lock;
+
