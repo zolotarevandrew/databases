@@ -1,0 +1,181 @@
+1) Scalar subquery simple
+
+EXPLAIN (analyze, buffers)
+SELECT *
+FROM bookings
+WHERE total_amount > (SELECT AVG(total_amount) FROM bookings);
+
+Bitmap Heap Scan on bookings  (cost=11624.49..17921.13 rows=197811 width=21) (actual time=147.151..166.096 rows=197568 loops=1)
+  Recheck Cond: (total_amount > $1)
+  Heap Blocks: exact=3780
+  Buffers: shared hit=3780 read=4367
+  InitPlan 1 (returns $1)
+    ->  Finalize Aggregate  (cost=7915.02..7915.03 rows=1 width=32) (actual time=123.475..123.525 rows=1 loops=1)
+          Buffers: shared read=3824
+          ->  Gather  (cost=7914.80..7915.01 rows=2 width=32) (actual time=123.400..123.513 rows=3 loops=1)
+                Workers Planned: 2
+                Workers Launched: 2
+                Buffers: shared read=3824
+                ->  Partial Aggregate  (cost=6914.80..6914.81 rows=1 width=32) (actual time=119.966..119.967 rows=1 loops=3)
+                      Buffers: shared read=3824
+                      ->  Parallel Seq Scan on bookings bookings_1  (cost=0.00..6296.64 rows=247264 width=6) (actual time=0.383..99.901 rows=197811 loops=3)
+                            Buffers: shared read=3824
+  ->  Bitmap Index Scan on bookings_total_amount  (cost=0.00..3660.01 rows=197811 width=0) (actual time=146.767..146.767 rows=197568 loops=1)
+        Index Cond: (total_amount > $1)
+        Buffers: shared read=4367
+Planning:
+  Buffers: shared hit=96 read=8
+Planning Time: 2.559 ms
+Execution Time: 171.124 ms
+
+total_amount > $1 (subquery result)
+InitPlan 1 (returns $1) -  subquery plan with parallel aggregation
+
+bitmap heap scan uses bitmap index scan to filter total_amount > $1 after subquery.
+
+2) Scalar subquery join
+
+EXPLAIN (analyze, buffers)
+SELECT b.*
+FROM bookings b
+JOIN (
+    SELECT AVG(total_amount) AS avg_total_amount
+    FROM bookings
+) avg_table
+ON b.total_amount > avg_table.avg_total_amount;
+
+
+Nested Loop  (cost=11624.48..19899.24 rows=197811 width=21) (actual time=45.844..79.372 rows=197568 loops=1)
+  Buffers: shared hit=8147
+  ->  Finalize Aggregate  (cost=7915.02..7915.03 rows=1 width=32) (actual time=33.269..33.324 rows=1 loops=1)
+        Buffers: shared hit=3824
+        ->  Gather  (cost=7914.80..7915.01 rows=2 width=32) (actual time=33.118..33.314 rows=3 loops=1)
+              Workers Planned: 2
+              Workers Launched: 2
+              Buffers: shared hit=3824
+              ->  Partial Aggregate  (cost=6914.80..6914.81 rows=1 width=32) (actual time=31.412..31.413 rows=1 loops=3)
+                    Buffers: shared hit=3824
+                    ->  Parallel Seq Scan on bookings  (cost=0.00..6296.64 rows=247264 width=6) (actual time=0.004..10.595 rows=197811 loops=3)
+                          Buffers: shared hit=3824
+  ->  Bitmap Heap Scan on bookings b  (cost=3709.46..10006.10 rows=197811 width=21) (actual time=12.567..29.669 rows=197568 loops=1)
+        Recheck Cond: (total_amount > (avg(bookings.total_amount)))
+        Heap Blocks: exact=3780
+        Buffers: shared hit=4323
+        ->  Bitmap Index Scan on bookings_total_amount  (cost=0.00..3660.01 rows=197811 width=0) (actual time=12.210..12.210 rows=197568 loops=1)
+              Index Cond: (total_amount > (avg(bookings.total_amount)))
+              Buffers: shared hit=543
+Planning:
+  Buffers: shared hit=123 read=2
+Planning Time: 0.434 ms
+Execution Time: 84.407 ms
+
+Partial Aggregate - loops 3, because 2 workers + main worker = 3
+
+outer loop - aggregation 1 row
+inner loop - bookings tablw
+
+
+3) Subquery in from with index
+
+EXPLAIN (analyze, buffers)
+SELECT book_date, avg_amount
+FROM (
+    SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+) subquery
+WHERE avg_amount > 500;
+
+GroupAggregate  (cost=0.42..32922.30 rows=42696 width=40) (actual time=0.021..367.683 rows=153129 loops=1)
+  Group Key: bookings.book_date
+  Filter: (avg(bookings.total_amount) > '500'::numeric)
+  Buffers: shared hit=593133 read=952
+  ->  Index Scan using bookings_date on bookings  (cost=0.42..28033.82 rows=593433 width=14) (actual time=0.013..222.068 rows=593433 loops=1)
+        Buffers: shared hit=593133 read=952
+Planning Time: 0.067 ms
+Execution Time: 371.837 ms
+
+4) Subquery in from without Index
+
+EXPLAIN (analyze, buffers)
+SELECT book_date, avg_amount
+FROM (
+    SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+) subquery
+WHERE avg_amount > 500;
+
+HashAggregate  (cost=47775.13..55491.70 rows=42696 width=40) (actual time=203.488..361.921 rows=153129 loops=1)
+  Group Key: bookings.book_date
+  Filter: (avg(bookings.total_amount) > '500'::numeric)
+  Planned Partitions: 8  Batches: 9  Memory Usage: 8273kB  Disk Usage: 23176kB
+  Buffers: shared hit=3824, temp read=2142 written=4745
+  ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=14) (actual time=0.007..30.301 rows=593433 loops=1)
+        Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=6 dirtied=1
+Planning Time: 0.154 ms
+Execution Time: 368.267 ms
+
+5) Subquery in select
+
+EXPLAIN (analyze, buffers)
+SELECT *,
+       (SELECT AVG(total_amount) FROM bookings b2 WHERE b1.book_date = b2.book_date) AS avg_amount
+FROM bookings b1
+WHERE total_amount > 500;
+
+Just fucked up postgres))
+
+
+6) Subquery in having
+
+EXPLAIN (analyze, buffers)
+SELECT b.book_date, AVG(b.total_amount) AS avg_amount
+FROM bookings b
+JOIN 
+    tickets t ON t.book_ref = b.book_ref 
+GROUP BY 
+    b.book_date, t.ticket_no 
+HAVING 
+    AVG(b.total_amount) > (
+        SELECT AVG(total_amount) 
+        FROM bookings
+    );
+	
+HashAggregate  (cost=134289.58..158060.60 rows=276357 width=54) (actual time=787.842..1312.931 rows=341378 loops=1)
+  Group Key: b.book_date, t.ticket_no
+  Filter: (avg(b.total_amount) > $1)
+  Planned Partitions: 64  Batches: 65  Memory Usage: 8209kB  Disk Usage: 61072kB
+  Rows Removed by Filter: 487693
+  Buffers: shared hit=7680 read=13888, temp read=11188 written=18676
+  InitPlan 1 (returns $1)
+    ->  Finalize Aggregate  (cost=7915.02..7915.03 rows=1 width=32) (actual time=39.962..40.008 rows=1 loops=1)
+          Buffers: shared hit=3824
+          ->  Gather  (cost=7914.80..7915.01 rows=2 width=32) (actual time=39.823..39.991 rows=3 loops=1)
+                Workers Planned: 2
+                Workers Launched: 2
+                Buffers: shared hit=3824
+                ->  Partial Aggregate  (cost=6914.80..6914.81 rows=1 width=32) (actual time=28.029..28.030 rows=1 loops=3)
+                      Buffers: shared hit=3824
+                      ->  Parallel Seq Scan on bookings  (cost=0.00..6296.64 rows=247264 width=6) (actual time=0.007..8.896 rows=197811 loops=3)
+                            Buffers: shared hit=3824
+  ->  Hash Join  (cost=20654.24..58235.28 rows=829071 width=28) (actual time=138.119..540.593 rows=829071 loops=1)
+        Hash Cond: (t.book_ref = b.book_ref)
+        Buffers: shared hit=3856 read=13888, temp read=6298 written=6298
+        ->  Seq Scan on tickets t  (cost=0.00..22210.71 rows=829071 width=21) (actual time=8.549..85.215 rows=829071 loops=1)
+              Buffers: shared hit=32 read=13888
+        ->  Hash  (cost=9758.33..9758.33 rows=593433 width=21) (actual time=129.347..129.347 rows=593433 loops=1)
+              Buckets: 131072  Batches: 8  Memory Usage: 4929kB
+              Buffers: shared hit=3824, temp written=2654
+              ->  Seq Scan on bookings b  (cost=0.00..9758.33 rows=593433 width=21) (actual time=0.016..42.527 rows=593433 loops=1)
+                    Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.182 ms
+JIT:
+  Functions: 30
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.982 ms, Inlining 0.000 ms, Optimization 0.625 ms, Emission 16.883 ms, Total 18.490 ms
+Execution Time: 1331.894 ms

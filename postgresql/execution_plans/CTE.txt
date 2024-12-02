@@ -1,0 +1,206 @@
+1) СTE Subquery without Index
+
+EXPLAIN (analyze, buffers)
+with avg_dates(book_date, avg_amount) as 
+(
+  SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+)
+SELECT book_date, avg_amount
+FROM avg_dates
+WHERE avg_amount > 500;
+
+HashAggregate  (cost=47775.13..55491.70 rows=42696 width=40) (actual time=179.571..341.349 rows=153129 loops=1)
+  Group Key: bookings.book_date
+  Filter: (avg(bookings.total_amount) > '500'::numeric)
+  Planned Partitions: 8  Batches: 9  Memory Usage: 8273kB  Disk Usage: 23176kB
+  Buffers: shared hit=3824, temp read=2142 written=4745
+  ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=14) (actual time=0.006..27.343 rows=593433 loops=1)
+        Buffers: shared hit=3824
+Planning Time: 0.068 ms
+Execution Time: 347.511 ms
+
+Same plan as in subquery
+
+2) MATERIALIZED cte
+
+EXPLAIN (analyze, buffers)
+with avg_dates(book_date, avg_amount) as MATERIALIZED
+(
+  SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+)
+SELECT book_date, avg_amount
+FROM avg_dates
+WHERE avg_amount > 500;
+
+CTE Scan on avg_dates  (cost=55171.48..58053.46 rows=42696 width=40) (actual time=178.208..378.404 rows=153129 loops=1)
+  Filter: (avg_amount > '500'::numeric)
+  Buffers: shared hit=3824, temp read=2142 written=5241
+  CTE avg_dates
+    ->  HashAggregate  (cost=47775.13..55171.48 rows=128088 width=40) (actual time=178.204..337.418 rows=153129 loops=1)
+          Group Key: bookings.book_date
+          Planned Partitions: 8  Batches: 9  Memory Usage: 8273kB  Disk Usage: 23176kB
+          Buffers: shared hit=3824, temp read=2142 written=4745
+          ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=14) (actual time=0.008..26.734 rows=593433 loops=1)
+                Buffers: shared hit=3824
+Planning Time: 0.071 ms
+Execution Time: 386.019 ms
+
+СTE is stored as temp table in here
+
+
+3) NOT MATERIALIZED CTE
+
+EXPLAIN (analyze, buffers)
+with avg_dates(book_date, avg_amount) as NOT  MATERIALIZED
+(
+  SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+)
+SELECT book_date, avg_amount
+FROM avg_dates
+WHERE avg_amount > 500;
+
+HashAggregate  (cost=47775.13..55491.70 rows=42696 width=40) (actual time=174.066..335.005 rows=153129 loops=1)
+  Group Key: bookings.book_date
+  Filter: (avg(bookings.total_amount) > '500'::numeric)
+  Planned Partitions: 8  Batches: 9  Memory Usage: 8273kB  Disk Usage: 23176kB
+  Buffers: shared hit=3824, temp read=2142 written=4745
+  ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=14) (actual time=0.006..26.460 rows=593433 loops=1)
+        Buffers: shared hit=3824
+Planning Time: 0.064 ms
+Execution Time: 341.580 ms
+
+
+4) CTE with join
+
+
+EXPLAIN (analyze, buffers)
+with avg_dates(book_date, avg_amount) as NOT  MATERIALIZED
+(
+  SELECT book_date, AVG(total_amount) AS avg_amount
+    FROM bookings
+    GROUP BY book_date
+)
+SELECT a.book_date, a.avg_amount, b.book_ref 
+FROM avg_dates a
+join bookings b on b.book_date  = a.book_date
+WHERE avg_amount > 500;
+
+
+
+Hash Join  (cost=56025.40..67341.54 rows=197811 width=47) (actual time=361.708..553.068 rows=593433 loops=1)
+  Hash Cond: (b.book_date = bookings.book_date)
+  Buffers: shared hit=7648, temp read=4050 written=6653
+  ->  Seq Scan on bookings b  (cost=0.00..9758.33 rows=593433 width=15) (actual time=0.004..24.413 rows=593433 loops=1)
+        Buffers: shared hit=3824
+  ->  Hash  (cost=55491.70..55491.70 rows=42696 width=40) (actual time=361.569..361.570 rows=153129 loops=1)
+        Buckets: 262144 (originally 65536)  Batches: 2 (originally 1)  Memory Usage: 6216kB
+        Buffers: shared hit=3824, temp read=2142 written=5088
+        ->  HashAggregate  (cost=47775.13..55491.70 rows=42696 width=40) (actual time=174.570..336.293 rows=153129 loops=1)
+              Group Key: bookings.book_date
+              Filter: (avg(bookings.total_amount) > '500'::numeric)
+              Planned Partitions: 8  Batches: 9  Memory Usage: 8273kB  Disk Usage: 23176kB
+              Buffers: shared hit=3824, temp read=2142 written=4745
+              ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=14) (actual time=0.001..27.624 rows=593433 loops=1)
+                    Buffers: shared hit=3824
+Planning:
+  Buffers: shared hit=30 read=1
+Planning Time: 0.241 ms
+Execution Time: 569.506 ms
+
+
+5) СTE with union
+
+EXPLAIN (analyze, buffers)
+SELECT book_ref
+FROM (
+    SELECT book_ref FROM bookings
+    UNION
+    SELECT book_ref FROM tickets
+) all_book_refs;
+
+Unique  (cost=251322.26..258434.78 rows=1422504 width=28) (actual time=492.156..877.737 rows=593433 loops=1)
+  Buffers: shared hit=3832 read=2097, temp read=1919 written=1933
+  ->  Sort  (cost=251322.26..254878.52 rows=1422504 width=28) (actual time=492.155..753.167 rows=1422504 loops=1)
+        Sort Key: bookings.book_ref
+        Sort Method: external merge  Disk: 15352kB
+        Buffers: shared hit=3832 read=2097, temp read=1919 written=1933
+        ->  Append  (cost=0.00..37867.34 rows=1422504 width=28) (actual time=1.454..203.966 rows=1422504 loops=1)
+              Buffers: shared hit=3829 read=2097
+              ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=7) (actual time=1.453..39.194 rows=593433 loops=1)
+                    Buffers: shared hit=3824
+              ->  Index Only Scan using tickets_book_ref_idx on tickets  (cost=0.42..20996.49 rows=829071 width=7) (actual time=0.016..100.537 rows=829071 loops=1)
+                    Heap Fetches: 0
+                    Buffers: shared hit=5 read=2097
+Planning Time: 0.056 ms
+JIT:
+  Functions: 3
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.158 ms, Inlining 0.000 ms, Optimization 0.106 ms, Emission 1.357 ms, Total 1.621 ms
+Execution Time: 893.355 ms
+
+
+- Appends two sequences
+- Sort them to remove duplicates
+- Unique - removes duplicates
+
+6) CTE with union all
+
+EXPLAIN (analyze, buffers)
+SELECT book_ref
+FROM (
+    SELECT book_ref FROM bookings
+    union all
+    SELECT book_ref FROM tickets
+) all_book_refs;
+
+Append  (cost=0.00..37867.34 rows=1422504 width=7) (actual time=0.008..158.355 rows=1422504 loops=1)
+  Buffers: shared hit=5926
+  ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=7) (actual time=0.008..37.848 rows=593433 loops=1)
+        Buffers: shared hit=3824
+  ->  Index Only Scan using tickets_book_ref_idx on tickets  (cost=0.42..20996.49 rows=829071 width=7) (actual time=0.018..55.884 rows=829071 loops=1)
+        Heap Fetches: 0
+        Buffers: shared hit=2102
+Planning Time: 0.055 ms
+Execution Time: 193.532 ms
+
+7) CTE with intersect
+
+EXPLAIN (analyze, buffers)
+SELECT book_ref
+FROM (
+    SELECT book_ref FROM bookings
+    intersect
+    SELECT book_ref FROM tickets
+) all_book_refs;
+
+Subquery Scan on all_book_refs  (cost=265547.30..272659.82 rows=489560 width=28) (actual time=745.630..1084.186 rows=593433 loops=1)
+  Buffers: shared hit=5926, temp read=7669 written=7691
+  ->  SetOp Intersect  (cost=265547.30..272659.82 rows=489560 width=32) (actual time=745.628..1049.730 rows=593433 loops=1)
+        Buffers: shared hit=5926, temp read=7669 written=7691
+        ->  Sort  (cost=265547.30..269103.56 rows=1422504 width=32) (actual time=745.606..919.496 rows=1422504 loops=1)
+              Sort Key: "*SELECT* 2".book_ref
+              Sort Method: external merge  Disk: 30720kB
+              Buffers: shared hit=5926, temp read=7669 written=7691
+              ->  Append  (cost=0.42..52092.38 rows=1422504 width=32) (actual time=2.282..245.650 rows=1422504 loops=1)
+                    Buffers: shared hit=5926
+                    ->  Subquery Scan on "*SELECT* 2"  (cost=0.42..29287.20 rows=829071 width=11) (actual time=2.282..110.795 rows=829071 loops=1)
+                          Buffers: shared hit=2102
+                          ->  Index Only Scan using tickets_book_ref_idx on tickets  (cost=0.42..20996.49 rows=829071 width=7) (actual time=0.018..57.298 rows=829071 loops=1)
+                                Heap Fetches: 0
+                                Buffers: shared hit=2102
+                    ->  Subquery Scan on "*SELECT* 1"  (cost=0.00..15692.66 rows=593433 width=11) (actual time=0.026..70.447 rows=593433 loops=1)
+                          Buffers: shared hit=3824
+                          ->  Seq Scan on bookings  (cost=0.00..9758.33 rows=593433 width=7) (actual time=0.024..34.882 rows=593433 loops=1)
+                                Buffers: shared hit=3824
+Planning Time: 0.061 ms
+JIT:
+  Functions: 7
+  Options: Inlining false, Optimization false, Expressions true, Deforming true
+  Timing: Generation 0.224 ms, Inlining 0.000 ms, Optimization 0.179 ms, Emission 2.115 ms, Total 2.517 ms
+Execution Time: 1101.583 ms

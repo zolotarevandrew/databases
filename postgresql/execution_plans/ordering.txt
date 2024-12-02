@@ -1,0 +1,56 @@
+1) Simple order with index
+
+explain (analyze, buffers) 
+SELECT * FROM flights ORDER BY status;
+
+Index Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..4011.22 rows=65664 width=63) (actual time=0.008..10.047 rows=65664 loops=1)
+  Buffers: shared hit=3344
+Planning:
+  Buffers: shared hit=20 read=1
+Planning Time: 0.166 ms
+Execution Time: 11.932 ms
+
+2) Simple order without index
+
+explain (analyze, buffers) 
+SELECT * FROM flights ORDER BY actual_departure ;
+
+Sort  (cost=9213.68..9377.84 rows=65664 width=63) (actual time=25.191..32.198 rows=65664 loops=1)
+  Sort Key: actual_departure
+  Sort Method: external merge  Disk: 5112kB
+  Buffers: shared hit=835, temp read=639 written=640
+  ->  Seq Scan on flights  (cost=0.00..1488.64 rows=65664 width=63) (actual time=0.003..3.347 rows=65664 loops=1)
+        Buffers: shared hit=832
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.056 ms
+Execution Time: 34.864 ms
+
+3) LIMIT Simple order with index
+
+explain (analyze, buffers) 
+SELECT * FROM flights ORDER BY status limit 100;
+
+Limit  (cost=0.29..6.40 rows=100 width=63) (actual time=0.014..0.030 rows=100 loops=1)
+  Buffers: shared hit=5
+  ->  Index Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..4011.22 rows=65664 width=63) (actual time=0.013..0.024 rows=100 loops=1)
+        Buffers: shared hit=5
+Planning Time: 0.055 ms
+Execution Time: 0.041 ms
+
+4) Two columns with partial index
+
+explain (analyze, buffers) 
+SELECT * FROM flights ORDER BY status, actual_departure ;
+
+Incremental Sort  (cost=1403.01..9237.49 rows=65664 width=63) (actual time=24.641..35.542 rows=65664 loops=1)
+  Sort Key: status, actual_departure
+  Presorted Key: status
+  Full-sort Groups: 6  Sort Method: quicksort  Average Memory: 31kB  Peak Memory: 31kB
+  Pre-sorted Groups: 4  Sort Method: external merge  Average Disk: 3960kB  Peak Disk: 3960kB
+  Buffers: shared hit=3347, temp read=495 written=496
+  ->  Index Scan using flights_status_aircraft_code_idx on flights  (cost=0.29..4011.22 rows=65664 width=63) (actual time=0.008..8.920 rows=65664 loops=1)
+        Buffers: shared hit=3344
+Planning Time: 0.068 ms
+Execution Time: 37.186 ms
+

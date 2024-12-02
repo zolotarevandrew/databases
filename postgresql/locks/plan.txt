@@ -1,4 +1,0 @@
-План
-https://www.postgresql.org/docs/current/explicit-locking.html
-
-https://chatgpt.com/c/67440b7b-96fc-8008-a4ca-7f59945a91e4

@@ -1,0 +1,21 @@
+1) all possible data types including custom data types + 
+2) isolatio and MVCC + 
+3) buffer cache and journal + 
+5) execution plans and how it works inside + 
+6) execution plans optimization + 
+7) query parallelism + 
+8) vacuum autovacuum +
+
+locks 
+
+indexes optimization
+types of indexes
+
+
+partitioning
+
+replication and high availability
+full text search
+json and jsonb
+concurrency control deadlock detection
+encodings collations
