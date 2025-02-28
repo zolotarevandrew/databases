@@ -1,0 +1,56 @@
+Интернет-магазин товаров
+Описание: База данных для интернет-магазина с товарами, заказами и покупателями.
+Требования:
+
+Товары имеют ID, название, категорию и цену.
+Покупатели имеют ID, имя и адрес доставки.
+Заказ связывает товары и покупателя, содержит количество товаров и дату заказа.
+Задание:
+
+Нормализуйте отношения до BCNF.
+Внедрите возможность хранения нескольких адресов доставки для одного покупателя.
+
+
+goods
+- id int primary key;
+- name text;
+
+good_prices
+- good_id int, date date primary key;
+- price decimal;
+
+cчитаем что цены могут меняться на конкретную дату;
+
+categories
+- id int;
+- name text;
+
+good_categories
+- good_id int;
+- category_id int;
+
+у товара может быть больше одной категории;
+
+buyers
+- id int;
+- name text;
+
+buyers_delivery_addresses
+- buyer_id int;
+- address text;
+
+у покупателя может быть несколько адресов доставки;
+
+orders
+- id int;
+- buyer_id int;
+- date datetime;
+- deliveredAt dateTime;
+
+заказ определяется датой и покупателем, общую сумму можно посчитать на основе good_prices;
+
+order_goods
+- order_id int;
+- good_id int;
+
+в заказе может быть несколько товаров;

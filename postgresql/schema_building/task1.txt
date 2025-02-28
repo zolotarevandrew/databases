@@ -1,0 +1,55 @@
+Описание: Cпроектируйте базу данных для библиотеки. 
+В библиотеке есть книги, читатели и информация о взятых книгах.
+
+Требования:
+- Каждая книга имеет уникальный идентификатор, название, автора и жанр.
+- Читатели имеют уникальный ID, имя, возраст и контактные данные.
+- Книга может быть взята читателем на определённый срок. Отметьте дату взятия и дату возврата.
+
+Задание:
+- Спроектируйте три отношения и нормализуйте их до третьей нормальной формы (3NF).
+- Подумайте, как учесть информацию о просроченных возвратах.
+
+
+books
+- id int;
+- name text;
+- deleted boolean;
+
+authors
+- id int;
+- name text;
+
+genres
+- id int;
+- name int;
+
+book_authors
+- book_id int;
+- author_id int;
+
+book_genres
+- book_id int;
+- genre_id int;
+
+readers
+- id int;
+- name text;
+- dateOfBirth date;
+- email text;
+- phone text;
+
+bookings
+- book_id int;
+- reader_id int;
+- captureDate date;
+- allowedDays int;
+- returnDate date null;
+
+add index where returnDate is null;
+
+
+
+
+
+

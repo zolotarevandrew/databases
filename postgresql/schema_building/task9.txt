@@ -1,0 +1,56 @@
+Описание: База данных для авиакомпании с рейсами, пассажирами и билетами.
+Требования:
+
+Рейсы имеют ID, пункт отправления, пункт назначения и время вылета.
+Пассажиры имеют ID, имя и паспортные данные.
+Билеты привязаны к рейсу и пассажиру, фиксируют стоимость и класс (эконом/бизнес).
+Задание:
+
+Спроектируйте отношения и нормализуйте их до BCNF.
+Добавьте возможность хранения информации о багаже пассажиров.
+
+
+flights
+- id int;
+- origin_city_id int;
+- destination_city_id int;
+- arrival_time datetime;
+- departure_time datetime;
+
+рейсы
+
+cities
+- id int;
+- name text;
+
+города
+
+passengers
+- id int;
+- name text;
+- passport_id int;
+
+пассажиры
+
+passports
+- id int;
+- code text;
+- country text;
+
+уникальные поля идентифицирующие паспорт для переиспользования.
+
+tickets
+- id int;
+- type (Economy/Business) int;
+- price decimal;
+- date datetime;
+- passenger_id int;
+- flight_id int;
+
+ticket_baggages
+- id int;
+- ticket_id int;
+- type int (Small/Medium/Big);
+- weight int;
+
+

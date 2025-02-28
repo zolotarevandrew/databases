@@ -1,0 +1,41 @@
+День 5: Система онлайн-курсов
+Описание: База данных для платформы онлайн-обучения.
+Требования:
+
+Студенты имеют ID, имя и email.
+Курсы имеют ID, название и инструктора.
+Студенты записываются на курсы. Учитываются дата записи и статус курса (пройден/не пройден).
+Задание:
+
+Спроектируйте отношения и нормализуйте их до четвёртой нормальной формы (4NF).
+Добавьте возможность хранения отзывов студентов о курсах
+
+
+students
+- id int;
+- name text;
+- email text;
+
+courses
+- id int;
+- name text;
+- coach_id int;
+
+coaches
+- id int;
+- name text;
+
+student_courses
+- student_id int;
+- course_id int;
+- record_date datetime;
+- status text (Passed/NotPassed);
+
+course_reviews
+- student_id int;
+- course_id int;
+- rating byte;
+- comment text null;
+
+
+

@@ -1,0 +1,51 @@
+Музыкальный стриминговый сервис
+Описание: База данных для платформы с песнями, артистами и пользователями.
+Требования:
+
+Песни имеют ID, название и жанр.
+Артисты имеют ID и имя.
+Пользователи слушают песни, фиксируется дата прослушивания и рейтинг песни.
+Задание:
+
+Спроектируйте отношения и нормализуйте их до четвёртой нормальной формы (4NF).
+Добавьте возможность создания плейлистов пользователями.
+
+songs
+- id int;
+- name text;
+
+genres
+- id int;
+- name text;
+
+song_genres
+- song_id int, genre_id int;
+
+artists
+- id int;
+- name text;
+
+users
+- id int;
+- name text;
+
+user_playlists
+- id int;
+- user_id int;
+- name text;
+
+playlist_songs
+- playlist_id int, song_id int;
+
+users_play_history
+- id int;
+- user_id int;
+- song_id int;
+- date datetime;
+- rating int;
+
+
+
+
+
+

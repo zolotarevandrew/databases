@@ -1,0 +1,57 @@
+1 NF
+
+Violations
+- Mixing data types within in a single column (different strings for example).
+- design table without a primary key.
+- repeating groups (mixing strings in one column).
+
+player_id, item_type, item_quantity
+
+2 NF
+
+player_id, item_type, item_quantity, rating
+
+deleting all rows by player - means we don't have rating anymore - (deletion anomaly).
+updarting rating by player can fail for some rows, two different rating for same player - (updating anomaly).
+we have a new player with beginner rating,  but he doesnt have any inventory items - (insertion anomaly).
+
+Each non-key attribute must depend on the entire primary key.
+
+Functional dependency
+{player_id, item_type} -> {quantity}
+{player_id} -> {rating}
+
+player table
+player, rating
+
+3 NF
+
+player_id, rating, skill_level (1-9)
+
+Beginner - 1-3
+Intermediate - 4-6
+Advanced - 7-9
+
+skill level was 3, we updated to 4, but rating stays as Beginner..
+
+{player_id} -> {skill_level}
+{player_id} -> {skill_level} -> {rating} - transitive dependency.
+
+
+player
+player, player_skill_level
+
+player_skill_levels
+skill_level, rating
+
+Every non-key atrribute in a table should depend on the key, the whole key,
+and nothing but key.
+
+tbd - boyce codd normal form?
+
+
+
+
+
+
+

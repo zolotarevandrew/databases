@@ -5,17 +5,12 @@
 6) execution plans optimization + 
 7) query parallelism + 
 8) vacuum autovacuum +
-
-locks 
-
-indexes optimization
-types of indexes
-
-
-partitioning
-
-replication and high availability
-full text search
-json and jsonb
-concurrency control deadlock detection
-encodings collations
+9) locks + 
+10) statistics + 
+11) partitioning +
+12) replication +
+13) normal forms + schema building
+14) indexes optimization + types of indexes
+15) full text search, json and jsonb
+16) concurrency control deadlock detection
+17) encodings collations

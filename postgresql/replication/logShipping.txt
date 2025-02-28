@@ -1,0 +1,37 @@
+Basics:
+
+It should be noted that log shipping is asynchronous, i.e., the WAL records are shipped after transaction commit.
+
+As a result, there is a window for data loss should the primary server suffer a catastrophic failure; 
+transactions not yet shipped will be lost. 
+The size of the data loss window in file-based log shipping can be limited by use of the archive_timeout parameter, which can be set as low as a few seconds. 
+However such a low setting will substantially increase the bandwidth required for file shipping. 
+Streaming replication allows a much smaller window of data loss.
+
+Recovery performance is sufficiently good that the standby will typically be only moments away from full availability once it has been activated. 
+As a result, this is called a warm standby configuration which offers high availability. 
+
+A standby server can also be used for read-only queries, in which case it is called a hot standby server.
+
+In standby mode, the server continuously applies WAL received from the primary server. 
+The standby server can read WAL from a WAL archive (see restore_command) or directly from the primary over a TCP connection (streaming replication). 
+The standby server will also attempt to restore any WAL found in the standby cluster's pg_wal directory. 
+That typically happens after a server restart, when the standby replays again WAL that was streamed from the primary before the restart.
+
+
+Streaming Replication:
+
+The standby connects to the primary, which streams WAL records to the standby as they're generated, without waiting for the WAL file to be filled.
+
+Cascading Replication:
+
+The cascading replication feature allows a standby server to accept replication connections and stream WAL records to other standbys, acting as a relay. 
+This can be used to reduce the number of direct connections to the primary and also to minimize inter-site bandwidth overheads.
+
+Synchronous Replication:
+
+PostgreSQL streaming replication is asynchronous by default. 
+If the primary server crashes then some transactions that were committed may not have been replicated to the standby server, causing data loss. 
+The amount of data loss is proportional to the replication delay at the time of failover.
+
+

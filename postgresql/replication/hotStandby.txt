@@ -1,0 +1,6 @@
+There are also additional types of conflict that can occur with hot standby. 
+These conflicts are hard conflicts in the sense that queries might need to be canceled and, in some cases, sessions disconnected to resolve them.
+The user is provided with several ways to handle these conflicts
+- hot_standby_feedback prop;
+- max_standby_*_delay;
+

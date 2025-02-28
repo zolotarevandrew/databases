@@ -1,0 +1,6 @@
+If the primary server fails then the standby server should begin failover procedures.
+If the standby server fails then no failover need take place. 
+If the standby server can be restarted, even some time later, then the recovery process can also be restarted immediately, taking advantage of restartable recovery. 
+If the standby server cannot be restarted, then a full new standby server instance should be created.
+
+PostgreSQL does not provide the system software required to identify a failure on the primary and notify the standby database server.

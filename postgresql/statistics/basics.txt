@@ -1,0 +1,119 @@
+1) pg_class - Base pages and tuples statistics
+
+select relpages, reltuples, relallvisible from pg_catalog.pg_class 
+where relname = 'flights'
+
+reltuples - number of rows;
+relpages - relation size in pages;
+reallvisible - number of pages marked in visibility map;
+
+2) Stats on null values
+
+EXPLAIN SELECT * FROM flights WHERE actual_departure IS NULL;
+
+SELECT round(reltuples * s.null_frac) AS rows
+FROM pg_class
+JOIN pg_stats s ON s.tablename = relname
+WHERE s.tablename = 'flights'
+AND s.attname = 'actual_departure';
+
+3) pg_stats
+
+n_distinct 
+-1 - all values are unique
+-3 - each value on average occurs in three rows
+
+
+SELECT round(reltuples / s.n_distinct) AS rows
+FROM pg_class
+JOIN pg_stats s ON s.tablename = relname
+WHERE s.tablename = 'flights'
+AND s.attname = 'departure_airport';
+
+
+most_common_vals
+
+SELECT round(reltuples * s.most_common_freqs[
+array_position((s.most_common_vals::text::text[]),'733')
+])
+FROM pg_class
+JOIN pg_stats s ON s.tablename = relname
+WHERE s.tablename = 'flights'
+AND s.attname = 'aircraft_code';
+--8559
+
+SELECT count(*) FROM flights WHERE aircraft_code = '733';
+--8263
+
+
+histogram
+
+SELECT histogram_bounds::text AS hist_bounds
+FROM pg_stats s
+WHERE s.tablename = 'boarding_passes' AND s.attname = 'seat_no';
+
+
+SELECT * FROM boarding_passes WHERE seat_no > '30B';
+--715165
+
+ SELECT sum(s.most_common_freqs[
+array_position((s.most_common_vals::text::text[]),v)
+])
+FROM pg_stats s, unnest(s.most_common_vals::text::text[]) v
+WHERE s.tablename = 'boarding_passes' AND s.attname = 'seat_no'
+AND v > '30B';
+
+--0.2335
+
+SELECT sum(s.most_common_freqs[
+array_position((s.most_common_vals::text::text[]),v)
+])
+FROM pg_stats s, unnest(s.most_common_vals::text::text[]) v
+WHERE s.tablename = 'boarding_passes' AND s.attname = 'seat_no';
+
+--0.678
+
+
+SELECT round( reltuples * (
+0.2335 -- most common vals
++ (1 - 0.67 - 0) * (46 / 100.0) -- histogram
+))
+FROM pg_class WHERE relname = 'boarding_passes';
+
+
+SELECT attname, avg_width FROM pg_stats
+WHERE (tablename, attname) IN ( VALUES
+('tickets', 'passenger_name'), ('ticket_flights','fare_conditions')
+);
+
+avg_width - fixed for int char e.tc, and has variable length for text for example.
+
+
+SELECT attname, correlation
+FROM pg_stats WHERE tablename = 'airports_data'
+ORDER BY abs(correlation) DESC;
+
+correlation - correlation between the physical location and the logical order
+
+5) expression statistics
+
+should be created manually
+
+CREATE STATISTICS flights_expr_stat ON (extract(
+month FROM scheduled_departure AT TIME ZONE 'Europe/Moscow'
+))
+FROM flights;
+
+or we can create index
+
+CREATE INDEX ON flights(extract(
+month FROM scheduled_departure AT TIME ZONE 'Europe/Moscow'
+));
+
+
+SELECT left(expr,50) || '...' AS expr,
+null_frac, avg_width, n_distinct,
+most_common_vals AS mcv,
+left(most_common_freqs::text,50) || '...' AS mcf,
+correlation
+FROM pg_stats_ext_exprs WHERE statistics_name = 'flights_expr_stat'

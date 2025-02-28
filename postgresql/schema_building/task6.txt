@@ -1,0 +1,46 @@
+День 6: Система складского учёта
+Описание: База данных для учёта товаров на складе.
+Требования:
+
+Товары имеют ID, название и поставщика.
+Поставщики имеют ID, имя компании и контактные данные.
+Учёт ведётся по количеству товаров и их движению (приход/расход).
+Задание:
+
+Спроектируйте три отношения и нормализуйте их до BCNF.
+Учтите возможность хранения информации о нескольких поставщиках для одного товара.
+
+
+goods
+- id int;
+- name text;
+
+suppliers
+- id int;
+- name text;
+- contact_details text;
+
+good_suppliers
+- good_id int, supplier_id int key;
+
+warehouse_added
+- good_id int;
+- quantity int;
+- date dateTime;
+
+warehouse_removed
+- good_id int;
+- quantity int;
+- date dateTime;
+
+или
+
+warehouse_transactions
+- id int key;
+- good_id int;
+- type int (Added/Removed);
+- date dateTime;
+- quantity int;
+
+
+
